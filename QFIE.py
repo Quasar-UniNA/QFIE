@@ -20,7 +20,7 @@ class QFIE:
     in IEEE Transactions on Fuzzy Systems, 2022, doi: 10.1109/TFUZZ.2022.3202348.
     ________________
 
-    
+
 
     '''
     def __init__(self):
