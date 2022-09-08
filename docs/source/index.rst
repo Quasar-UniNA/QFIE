@@ -6,6 +6,11 @@
 Welcome to QFIE's documentation!
 ================================
 
+QFIE is a Python library for implementing the quanutm fuzzy inference engine proposed in:
+
+Acampora, Giovanni, Roberto Schiattarella, and Autilia Vitiello. "On the Implementation of Fuzzy Inference Engines on Quantum Computers." IEEE Transactions on Fuzzy Systems (2022).
+
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
