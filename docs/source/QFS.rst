@@ -1,7 +1,7 @@
 QFS module
 ==========
 
-.. automodule:: QFS
+.. automodule:: QFIE.QFS
    :members:
    :undoc-members:
    :show-inheritance:
