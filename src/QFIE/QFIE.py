@@ -1,6 +1,6 @@
+""" This module implements the base class for implementing the quantum fuzzy inference engine proposed in doi: 10.1109/TFUZZ.2022.3202348. """
 import numpy as np
 import skfuzzy as fuzz
-import matplotlib.pyplot as plt
 import fuzzy_partitions as fp
 import QFS
 import math
@@ -14,15 +14,15 @@ from qiskit.visualization import plot_histogram
 
 class QFIE:
     """
+
     Class implementing the Quantum Fuzzy Inference Engine proposed in:
 
     G. Acampora, R. Schiattarella and A. Vitiello, "On the Implementation of Fuzzy Inference Engines on Quantum Computers,"
     in IEEE Transactions on Fuzzy Systems, 2022, doi: 10.1109/TFUZZ.2022.3202348.
     ________________
 
-
-
     """
+
     def __init__(self):
         self.input_ranges = {}
         self.output_range = {}
@@ -35,6 +35,13 @@ class QFIE:
         self.qc = ""
 
     def input_variable(self, name, range):
+        """ Define the input variable "name" of the system.
+        Args:
+            name (str): Name of the variable as string.
+            range (np array): Universe of the discourse for the input variable.
+        Returns:
+            None
+        """
         if name in list(self.input_ranges.keys()):
             raise Exception("Variable name must be unambiguos")
         else:
@@ -43,6 +50,13 @@ class QFIE:
             self.input_partitions[name] = ""
 
     def output_variable(self, name, range):
+        """ Define the output variable "name" of the system.
+        Args:
+            name (str): Name of the variable as string.
+            range (np array): Universe of the discourse for the output variable.
+        Returns:
+            None
+        """
         self.output_range[name] = range
         self.output_fuzzyset[name] = []
         self.output_partition[name] = ""
