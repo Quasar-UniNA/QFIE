@@ -1,8 +1,6 @@
 """ This module implements the base class for implementing the quantum fuzzy inference engine proposed in doi: 10.1109/TFUZZ.2022.3202348. """
 import numpy as np
 import skfuzzy as fuzz
-import fuzzy_partitions as fp
-import QFS
 import math
 from qiskit import (
     ClassicalRegister,
@@ -10,9 +8,10 @@ from qiskit import (
     BasicAer,
 )
 from qiskit.visualization import plot_histogram
+from . import fuzzy_partitions as fp
+from . import QFS as QFS
 
-
-class QFIE:
+class QuantumFuzzyEngine:
     """
 
     Class implementing the Quantum Fuzzy Inference Engine proposed in:

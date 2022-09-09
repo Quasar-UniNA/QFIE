@@ -1,15 +1,9 @@
 from qiskit import (
     QuantumCircuit,
     QuantumRegister,
-    ClassicalRegister,
-    execute,
-    Aer,
-    IBMQ,
-    BasicAer,
 )
 import math
-import fuzzy_partitions as fp
-from qiskit.visualization import plot_histogram
+from . import fuzzy_partitions as fp
 
 Qregisters = []
 

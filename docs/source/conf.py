@@ -1,6 +1,7 @@
 import os
 import sys
 
+#sys.path.insert(0, os.path.abspath("../../src/"))
 sys.path.insert(0, os.path.abspath("../../src/"))
 
 # Configuration file for the Sphinx documentation builder.
@@ -11,7 +12,7 @@ sys.path.insert(0, os.path.abspath("../../src/"))
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'QFIE'
+project = 'QFIE_Package'
 copyright = '2022, Roberto Schiattarella'
 author = 'Roberto Schiattarella'
 release = '1.0.0'
@@ -21,10 +22,13 @@ release = '1.0.0'
 
 extensions = ['sphinx.ext.autodoc',
   'sphinx.ext.viewcode',
-  'sphinx.ext.napoleon',]
+  'sphinx.ext.napoleon',
+  'nbsphinx',
+  'IPython.sphinxext.ipython_console_highlighting']
 
 templates_path = ['_templates']
 exclude_patterns = []
+
 
 
 
