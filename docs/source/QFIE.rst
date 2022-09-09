@@ -1,7 +1,7 @@
 QFIE module
 ===========
 
-.. automodule:: QFIE.QFIE
+.. automodule:: QFIE
    :members:
    :undoc-members:
    :show-inheritance:
