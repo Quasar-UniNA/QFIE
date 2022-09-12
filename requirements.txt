@@ -84,6 +84,7 @@ nb-black==1.0.7
 nbclient
 nbconvert==5.5.0
 nbformat
+nbsphinx==0.8.9 
 nest-asyncio
 networkx==2.6.3
 notebook
