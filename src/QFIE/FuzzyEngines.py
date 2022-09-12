@@ -19,7 +19,7 @@ class QuantumFuzzyEngine:
 
     G. Acampora, R. Schiattarella and A. Vitiello, "On the Implementation of Fuzzy Inference Engines on Quantum Computers,"
     in IEEE Transactions on Fuzzy Systems, 2022, doi: 10.1109/TFUZZ.2022.3202348.
-    ________________
+
 
     """
 
@@ -36,6 +36,7 @@ class QuantumFuzzyEngine:
 
     def input_variable(self, name, range):
         """Define the input variable "name" of the system.
+
         Args:
             name (str): Name of the variable as string.
             range (np array): Universe of the discourse for the input variable.
@@ -51,6 +52,7 @@ class QuantumFuzzyEngine:
 
     def output_variable(self, name, range):
         """Define the output variable "name" of the system.
+
         Args:
             name (str): Name of the variable as string.
             range (np array): Universe of the discourse for the output variable.
@@ -63,6 +65,7 @@ class QuantumFuzzyEngine:
 
     def add_input_fuzzysets(self, var_name, set_names, sets):
         """Set the partition for the input fuzzy variable 'var_name'.
+
         Args:
             var_name (str): name of the fuzzy variable defined with input_variable method previously.
             set_names (list): list of fuzzy sets' name as str.
@@ -75,7 +78,9 @@ class QuantumFuzzyEngine:
         self.input_partitions[var_name] = fp.fuzzy_partition(var_name, set_names)
 
     def add_output_fuzzysets(self, var_name, set_names, sets):
-        """Set the partition for the output fuzzy variable 'var_name'.
+        """
+        Set the partition for the output fuzzy variable 'var_name'.
+
         Args:
             var_name (str): name of the fuzzy variable defined with output_variable method previously.
             set_names (list): list of fuzzy sets' name as str.
@@ -88,13 +93,13 @@ class QuantumFuzzyEngine:
         self.output_partition[var_name] = fp.fuzzy_partition(var_name, set_names)
 
     def set_rules(self, rules):
-        """Set the rule-base of the system.
+        """Set the rule-base of the system. \n
+        Rules must be formatted as follows: 'if var_1 is x_i and var_2 is x_k and ... and var_n is x_l then out_1 is y_k'
+
         Args:
             rules (list): list of rules as strings.
         Returns:
             None
-        ______________
-        Each rule must be of the following form: 'if input_var_1 is x_1 and input_var_2 is x_2 and ... then out_var is y_1'.
         """
         self.rules = rules
 
@@ -217,7 +222,6 @@ class QuantumFuzzyEngine:
             else:
                 memberships[state] = 0
 
-        # norm_memberships = {k: v / total for total in (sum(memberships.values()),) for k, v in memberships.items()}
         norm_memberships = memberships
         print("Output Counts", memberships)
         activation = {}

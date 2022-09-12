@@ -1,4 +1,4 @@
-QFIE
+API Documentation
 ====
 
 .. toctree::
