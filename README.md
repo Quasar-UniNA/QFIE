@@ -6,6 +6,19 @@ This repo contains the code for executing the quantum fuzzy inference engine pro
     in IEEE Transactions on Fuzzy Systems, 2022, doi: 10.1109/TFUZZ.2022.3202348.''**
 
 
+## How to install
+
+The package can be installed with Python's pip package manager.
+
+```bash
+git clone https://github.com/Quasar-UniNA/QFIE.git QFIE
+cd QFIE
+pip install .
+```
+
+This process will copy the `QFIE` library to your environment python path.
+
+
 
 ## Credits
 
