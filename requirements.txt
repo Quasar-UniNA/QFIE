@@ -49,7 +49,7 @@ ipython
 ipython-genutils
 ipywidgets
 jedi
-Jinja2
+jinja2==3.0.1
 joblib==1.1.0
 jsonschema
 jupyter==1.0.0
