@@ -11,6 +11,7 @@ from qiskit.visualization import plot_histogram
 from . import fuzzy_partitions as fp
 from . import QFS as QFS
 
+
 class QuantumFuzzyEngine:
     """
 
@@ -34,7 +35,7 @@ class QuantumFuzzyEngine:
         self.qc = ""
 
     def input_variable(self, name, range):
-        """ Define the input variable "name" of the system.
+        """Define the input variable "name" of the system.
         Args:
             name (str): Name of the variable as string.
             range (np array): Universe of the discourse for the input variable.
@@ -49,7 +50,7 @@ class QuantumFuzzyEngine:
             self.input_partitions[name] = ""
 
     def output_variable(self, name, range):
-        """ Define the output variable "name" of the system.
+        """Define the output variable "name" of the system.
         Args:
             name (str): Name of the variable as string.
             range (np array): Universe of the discourse for the output variable.
@@ -61,16 +62,40 @@ class QuantumFuzzyEngine:
         self.output_partition[name] = ""
 
     def add_input_fuzzysets(self, var_name, set_names, sets):
+        """Set the partition for the input fuzzy variable 'var_name'.
+        Args:
+            var_name (str): name of the fuzzy variable defined with input_variable method previously.
+            set_names (list): list of fuzzy sets' name as str.
+            sets (list): list of scikit-fuzzy membership function objects.
+        Returns:
+            None
+        """
         for set in sets:
             self.input_fuzzysets[var_name].append(set)
         self.input_partitions[var_name] = fp.fuzzy_partition(var_name, set_names)
 
     def add_output_fuzzysets(self, var_name, set_names, sets):
+        """Set the partition for the output fuzzy variable 'var_name'.
+        Args:
+            var_name (str): name of the fuzzy variable defined with output_variable method previously.
+            set_names (list): list of fuzzy sets' name as str.
+            sets (list): list of scikit-fuzzy membership function objects.
+        Returns:
+            None
+        """
         for set in sets:
             self.output_fuzzyset[var_name].append(set)
         self.output_partition[var_name] = fp.fuzzy_partition(var_name, set_names)
 
     def set_rules(self, rules):
+        """Set the rule-base of the system.
+        Args:
+            rules (list): list of rules as strings.
+        Returns:
+            None
+        ______________
+        Each rule must be of the following form: 'if input_var_1 is x_1 and input_var_2 is x_2 and ... then out_var is y_1'.
+        """
         self.rules = rules
 
     def truncate(self, n, decimals=0):

@@ -5,6 +5,8 @@ Welcome to QFIE's documentation!
    :hidden:
 
    modules
+   Fan_Speed_Control.ipynb
+   Lighting_Control.ipynb
 
 QFIE Package is the Python library useful for implement the quantum fuzzy inference engine proposed in:
 
