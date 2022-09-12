@@ -1,4 +1,4 @@
-# Quantum Fuzzy Inference Engines [![Made at Quasar!](https://img.shields.io/badge/Unina-%20QuasarLab-blue)](http://quasar.unina.it) [![Made at Quasar!](https://img.shields.io/badge/Documentation-%20Readthedocs-brightgreen)](https://qfie.readthedocs.io/en/latest/index.html)
+# Quantum Fuzzy Inference Engines [![Made at Quasar!](https://img.shields.io/badge/Unina-%20QuasarLab-blue)](http://quasar.unina.it) [![Made at Quasar!](https://img.shields.io/badge/Documentation-%20Readthedocs-brightgreen)](https://qfie.readthedocs.io/en/latest/index.html) [![Made at Quasar!](https://img.shields.io/badge/Related-%20Paper-orange)](https://ieeexplore.ieee.org/document/9869303)
 
 This repo contains the code for executing the quantum fuzzy inference engine proposed in:
 
