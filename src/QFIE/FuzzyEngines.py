@@ -1,4 +1,4 @@
-""" This module implements the base class for implementing the quantum fuzzy inference engine proposed in doi: 10.1109/TFUZZ.2022.3202348. """
+""" This module implements the base class for setting up the quantum fuzzy inference engine proposed in doi: 10.1109/TFUZZ.2022.3202348. """
 import numpy as np
 import skfuzzy as fuzz
 import math
@@ -108,6 +108,16 @@ class QuantumFuzzyEngine:
         return math.floor(n * multiplier + 0.5) / multiplier
 
     def counts_evaluator(self, n_qubits, counts):
+        """Function returning the alpha values for alpha-cutting the output fuzzy sets according to the
+        probability of measuring the related basis states on the output quantum register.
+
+        Args:
+            n_qubits (int): number of qubits in the output quantum register.
+            counts (dict): counting dictionary of the output quantum register measurement.
+        Returns:
+            alpha values for alpha-cutting the output fuzzy sets as 'dict'.
+        """
+
         output = {}
         n_shots = sum(list(counts.values()))
         counts = {k: v / n_shots for k, v in counts.items()}
@@ -139,7 +149,17 @@ class QuantumFuzzyEngine:
         return output
 
     def build_inference_qc(self, input_values, draw_qc=False):
-        """input_values must be a dictionary {'var_name': value}"""
+        """ This function builds the quantum circuit implementing the QFIE, initializing the input quantum registers
+        according to the 'input_value' argument.
+
+        Args:
+            input_values (dict): dictionary containing the crisp input values of the system.
+                E.g. {'var_name_1' (str): x_1 (float), ..., 'var_name_n' (str): x_n (float)}
+
+            draw_qc (Boolean): True for drawing the quantum circuit built. False otherwise.
+        Returns:
+            None
+        """
         self.qc = QFS.generate_circuit(list(self.input_partitions.values()))
         self.qc = QFS.output_register(self.qc, list(self.output_partition.values())[0])
         print(input_values)
@@ -186,6 +206,26 @@ class QuantumFuzzyEngine:
             self.qc.draw("mpl").show()
 
     def execute(self, backend_name, n_shots, provider=None, plot_histo=False):
+        """ Run the inference engine.
+
+        Args:
+            backend_name (str): IBMQ backend to use for computing.\n
+
+                - Use "qasm_simulator" to simulate the run.\n
+
+                - For real devices an IBMQ provider is required.
+
+            n_shots (int): Number of shots.
+
+            provider (str): IBMQ Provider.\n
+
+                - Default 'None' to use with 'qasm_simulator' backend
+
+            plot_histo (Boolean): True for plotting the counts histogram. False Otherwise.
+
+        Return:
+            Crisp output of the system.
+        """
         if backend_name == "qasm_simulator":
             backend = BasicAer.get_backend(backend_name)
         else:
