@@ -23,7 +23,7 @@ class QuantumFuzzyEngine:
 
     """
 
-    def __init__(self):
+    def __init__(self, verbose = True):
         self.input_ranges = {}
         self.output_range = {}
         self.input_fuzzysets = {}
@@ -33,6 +33,7 @@ class QuantumFuzzyEngine:
         self.variables = {}
         self.rules = []
         self.qc = ""
+        self.verbose = verbose
 
     def input_variable(self, name, range):
         """Define the input variable "name" of the system.
@@ -162,7 +163,8 @@ class QuantumFuzzyEngine:
         """
         self.qc = QFS.generate_circuit(list(self.input_partitions.values()))
         self.qc = QFS.output_register(self.qc, list(self.output_partition.values())[0])
-        print(input_values)
+        if self.verbose:
+            print(input_values)
         fuzzyfied_values = {}
         norm_values = {}
         for var_name in list(input_values.keys()):
@@ -173,7 +175,8 @@ class QuantumFuzzyEngine:
                 for i in self.input_fuzzysets[var_name]
             ]
             # norm_values[var_name] = [self.truncate(float(i)/sum(fuzzyfied_values[var_name]), 3) for i in fuzzyfied_values[var_name]]
-        print("Input values ", fuzzyfied_values)
+        if self.verbose:
+            print("Input values ", fuzzyfied_values)
         initial_state = {}
         for var_name in list(input_values.keys()):
             initial_state[var_name] = [
@@ -205,7 +208,7 @@ class QuantumFuzzyEngine:
         if draw_qc:
             self.qc.draw("mpl").show()
 
-    def execute(self, backend_name, n_shots, provider=None, plot_histo=False):
+    def execute(self, backend_name, n_shots, provider=None, plot_histo=False, GPU = False):
         """ Run the inference engine.
 
         Args:
@@ -223,6 +226,10 @@ class QuantumFuzzyEngine:
 
             plot_histo (Boolean): True for plotting the counts histogram. False Otherwise.
 
+            GPU (Boolean): True for using GPU for simulation. Use False if backend is a real device.
+
+
+
         Return:
             Crisp output of the system.
         """
@@ -230,6 +237,9 @@ class QuantumFuzzyEngine:
             backend = BasicAer.get_backend(backend_name)
         else:
             backend = provider.get_backend(backend_name)
+
+        if GPU:
+            backend.set_options(device='GPU')
 
         job = execute(self.qc, backend, shots=n_shots)
         result = job.result()
@@ -263,7 +273,8 @@ class QuantumFuzzyEngine:
                 memberships[state] = 0
 
         norm_memberships = memberships
-        print("Output Counts", memberships)
+        if self.verbose:
+            print("Output Counts", memberships)
         activation = {}
         set_number = 0
         for set in list(output_dict.keys()):
