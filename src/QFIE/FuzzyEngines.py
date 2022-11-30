@@ -247,9 +247,9 @@ class QuantumFuzzyEngine:
             plot_histogram(
                 job.result().get_counts(), color="midnightblue", figsize=(7, 10)
             ).show()
-        counts_ = job.result().get_counts()
+        self.counts_ = job.result().get_counts()
         self.n_q = len(self.output_fuzzyset[self.out_register_name])
-        counts = self.counts_evaluator(n_qubits=self.n_q, counts=counts_)
+        counts = self.counts_evaluator(n_qubits=self.n_q, counts=self.counts_)
         # normalized_counts = {k: v / total for total in (sum(counts.values()),) for k, v in counts.items()}
         normalized_counts = counts
         output_dict = {
