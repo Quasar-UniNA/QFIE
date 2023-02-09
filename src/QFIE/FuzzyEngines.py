@@ -37,10 +37,11 @@ class QuantumFuzzyEngine:
 
     def input_variable(self, name, range):
         """Define the input variable "name" of the system.
-
+        ...
         Args:
-            name (str): Name of the variable as string.
-            range (np array): Universe of the discourse for the input variable.
+            param: name (str): Name of the variable as string.
+            param: range (np array): Universe of the discourse for the input variable.
+        ...
         Returns:
             None
         """
@@ -53,10 +54,11 @@ class QuantumFuzzyEngine:
 
     def output_variable(self, name, range):
         """Define the output variable "name" of the system.
-
+        ...
         Args:
-            name (str): Name of the variable as string.
-            range (np array): Universe of the discourse for the output variable.
+            param: name (str): Name of the variable as string.
+            param: range (np array): Universe of the discourse for the output variable.
+        ...
         Returns:
             None
         """
@@ -66,11 +68,12 @@ class QuantumFuzzyEngine:
 
     def add_input_fuzzysets(self, var_name, set_names, sets):
         """Set the partition for the input fuzzy variable 'var_name'.
-
+        ...
         Args:
-            var_name (str): name of the fuzzy variable defined with input_variable method previously.
-            set_names (list): list of fuzzy sets' name as str.
-            sets (list): list of scikit-fuzzy membership function objects.
+            param: var_name (str): name of the fuzzy variable defined with input_variable method previously.
+            param: set_names (list): list of fuzzy sets' name as str.
+            param: sets (list): list of scikit-fuzzy membership function objects.
+        ...
         Returns:
             None
         """
@@ -79,13 +82,12 @@ class QuantumFuzzyEngine:
         self.input_partitions[var_name] = fp.fuzzy_partition(var_name, set_names)
 
     def add_output_fuzzysets(self, var_name, set_names, sets):
-        """
-        Set the partition for the output fuzzy variable 'var_name'.
-
+        """ Set the partition for the output fuzzy variable 'var_name'.
+        ...
         Args:
-            var_name (str): name of the fuzzy variable defined with output_variable method previously.
-            set_names (list): list of fuzzy sets' name as str.
-            sets (list): list of scikit-fuzzy membership function objects.
+            param: var_name (str): name of the fuzzy variable defined with output_variable method previously.
+            param: set_names (list): list of fuzzy sets' name as str.
+            param: sets (list): list of scikit-fuzzy membership function objects.
         Returns:
             None
         """
@@ -96,9 +98,10 @@ class QuantumFuzzyEngine:
     def set_rules(self, rules):
         """Set the rule-base of the system. \n
         Rules must be formatted as follows: 'if var_1 is x_i and var_2 is x_k and ... and var_n is x_l then out_1 is y_k'
-
+        ...
         Args:
-            rules (list): list of rules as strings.
+            param: rules (list): list of rules as strings.
+        ...
         Returns:
             None
         """
@@ -111,10 +114,11 @@ class QuantumFuzzyEngine:
     def counts_evaluator(self, n_qubits, counts):
         """Function returning the alpha values for alpha-cutting the output fuzzy sets according to the
         probability of measuring the related basis states on the output quantum register.
-
+        ...
         Args:
-            n_qubits (int): number of qubits in the output quantum register.
-            counts (dict): counting dictionary of the output quantum register measurement.
+            param: n_qubits (int): number of qubits in the output quantum register.
+            param: counts (dict): counting dictionary of the output quantum register measurement.
+        ...
         Returns:
             alpha values for alpha-cutting the output fuzzy sets as 'dict'.
         """
@@ -149,15 +153,17 @@ class QuantumFuzzyEngine:
 
         return output
 
-    def build_inference_qc(self, input_values, draw_qc=False):
+    def build_inference_qc(self, input_values, draw_qc=False, **kwargs):
         """ This function builds the quantum circuit implementing the QFIE, initializing the input quantum registers
         according to the 'input_value' argument.
-
+        ...
         Args:
-            input_values (dict): dictionary containing the crisp input values of the system.
+            :param input_values (dict): dictionary containing the crisp input values of the system.
                 E.g. {'var_name_1' (str): x_1 (float), ..., 'var_name_n' (str): x_n (float)}
+            :param draw_qc (Bool - default:False): True for drawing the quantum circuit built. False otherwise.
 
-            draw_qc (Boolean): True for drawing the quantum circuit built. False otherwise.
+            :keyword: filename (str): file path to save image to.
+        ...
         Returns:
             None
         """
@@ -206,40 +212,35 @@ class QuantumFuzzyEngine:
         self.qc.add_register(out)
         self.qc.measure(QFS.select_qreg_by_name(self.qc, self.out_register_name), out)
         if draw_qc:
-            self.qc.draw("mpl").show()
+            if 'filename' in kwargs:
+                self.qc.draw("mpl", filename=kwargs['filename'])
+            else: self.qc.draw("mpl").show()
 
-    def execute(self, backend_name, n_shots, provider=None, plot_histo=False, GPU = False):
+
+    def execute(self, n_shots: int, plot_histo=False, GPU = False, **kwargs):
         """ Run the inference engine.
-
+        ...
         Args:
-            backend_name (str): IBMQ backend to use for computing.\n
+            param: n_shots (int): Number of shots.
+            param: plot_histo (Bool- default False): True for plotting the counts histogram.
+            param: GPU (Bool- default False): True for using GPU for simulation. Use False if backend is a real device.
 
-                - Use "qasm_simulator" to simulate the run.\n
-
-                - For real devices an IBMQ provider is required.
-
-            n_shots (int): Number of shots.
-
-            provider (str): IBMQ Provider.\n
-
-                - Default 'None' to use with 'qasm_simulator' backend
-
-            plot_histo (Boolean): True for plotting the counts histogram. False Otherwise.
-
-            GPU (Boolean): True for using GPU for simulation. Use False if backend is a real device.
-
-
-
+            keyword: backend: quantum backend to run the quantum circuit. If not specified, qasm simulator is used.
+        ...
         Return:
             Crisp output of the system.
         """
-        if backend_name == "qasm_simulator":
-            backend = BasicAer.get_backend(backend_name)
+
+        if 'backend' in kwargs:
+            backend = kwargs['backend']
         else:
-            backend = provider.get_backend(backend_name)
+            backend = BasicAer.get_backend('qasm_simulator')
 
         if GPU:
-            backend.set_options(device='GPU')
+            try:
+                backend.set_options(device='GPU')
+            except: print('Not possible use GPU for this quantum backend or your device is not equipped with GPUs')
+
 
         job = execute(self.qc, backend, shots=n_shots)
         result = job.result()
