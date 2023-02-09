@@ -7,7 +7,7 @@ from . import fuzzy_partitions as fp
 
 Qregisters = []
 
-
+print('ciao belliiiiissimi')
 def generate_circuit(fuzzy_partitions):
     """Function generating a quantum circuit with width required by QFS"""
     qc = QuantumCircuit()
