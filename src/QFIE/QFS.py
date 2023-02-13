@@ -39,6 +39,11 @@ def output_register(qc, output_partition):
     return qc
 
 
+def output_single_qubit_register(qc, name):
+    qc.add_register(QuantumRegister(1, name=name))
+    return qc
+
+
 def select_qreg_by_name(qc, name):
     """Function returning the quantum register in QC selected by name"""
     for qr in qc.qregs:
