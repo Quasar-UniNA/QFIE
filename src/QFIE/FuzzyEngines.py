@@ -8,6 +8,8 @@ from qiskit import (
     BasicAer,
 )
 from qiskit.visualization import plot_histogram
+from qiskit import transpile
+
 from . import fuzzy_partitions as fp
 from . import QFS as QFS
 
@@ -226,6 +228,7 @@ class QuantumFuzzyEngine:
             param: GPU (Bool- default False): True for using GPU for simulation. Use False if backend is a real device.
 
             keyword: backend: quantum backend to run the quantum circuit. If not specified, qasm simulator is used.
+            keyword: transpile_info (bool - default False): True for getting information about transpiled qc
         ...
         Return:
             Crisp output of the system.
@@ -241,8 +244,17 @@ class QuantumFuzzyEngine:
                 backend.set_options(device='GPU')
             except: print('Not possible use GPU for this quantum backend or your device is not equipped with GPUs')
 
+        if 'transpile_info' in kwargs:
+            if kwargs['transpile_info'] == True:
+                self.transpiled_qc = transpile(self.qc, backend, optimization_level=3)
+                print('transpiled depth ', self.transpiled_qc.depth())
+                print('CNOTs number ', self.transpiled_qc.count_ops()['cx'])
 
-        job = execute(self.qc, backend, shots=n_shots)
+        if 'transpile_info' in kwargs:
+            if kwargs['transpile_info'] == True:
+                job = execute(self.transpiled_qc, backend, shots=n_shots)
+        else:
+            job = execute(self.qc, backend, shots=n_shots)
         result = job.result()
         if plot_histo:
             plot_histogram(
