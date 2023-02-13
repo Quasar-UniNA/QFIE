@@ -297,7 +297,6 @@ class QuantumFuzzyEngine:
                     QFS.select_qreg_by_name(self.qc[label], self.out_register_name[-1]), out)
                 if draw_qc:
                     self.qc[label].draw("mpl").show()
-                    print("ok")
 
     def execute(self, backend_name, n_shots, provider=None, plot_histo=False, GPU = False):
         """ Run the inference engine.
@@ -332,57 +331,124 @@ class QuantumFuzzyEngine:
         if GPU:
             backend.set_options(device='GPU')
 
-        job = execute(self.qc['full_circuit'], backend, shots=n_shots)
-        result = job.result()
-        if plot_histo:
-            plot_histogram(
-                job.result().get_counts(), color="midnightblue", figsize=(7, 10)
-            ).show()
-        self.counts_ = job.result().get_counts()
-        self.n_q = len(self.output_fuzzyset[self.out_register_name])
-        counts = self.counts_evaluator(n_qubits=self.n_q, counts=self.counts_)
-        # normalized_counts = {k: v / total for total in (sum(counts.values()),) for k, v in counts.items()}
-        normalized_counts = counts
-        output_dict = {
-            i: [] for i in self.output_partition[self.out_register_name].sets
-        }
-        counter = 0
-        for set in list(output_dict.keys()):
-            counter = counter + 1
-            for i in range(self.n_q):
-                if i == self.n_q - counter:
-                    output_dict[set].append("1")
+        if len(self.qc) == 1:
+
+            # Normal version
+            job = execute(self.qc['full_circuit'], backend, shots=n_shots)
+            result = job.result()
+            if plot_histo:
+                plot_histogram(
+                    job.result().get_counts(), color="midnightblue", figsize=(7, 10)
+                ).show()
+            self.counts_ = job.result().get_counts()
+            self.n_q = len(self.output_fuzzyset[self.out_register_name])
+            counts = self.counts_evaluator(n_qubits=self.n_q, counts=self.counts_)
+            # normalized_counts = {k: v / total for total in (sum(counts.values()),) for k, v in counts.items()}
+            normalized_counts = counts
+            output_dict = {
+                i: [] for i in self.output_partition[self.out_register_name].sets
+            }
+            counter = 0
+            for set in list(output_dict.keys()):
+                counter = counter + 1
+                for i in range(self.n_q):
+                    if i == self.n_q - counter:
+                        output_dict[set].append("1")
+                    else:
+                        output_dict[set].append("0")
+                output_dict[set] = "".join(output_dict[set])
+
+            memberships = {}
+            for state in list(output_dict.values()):
+                if state in list(normalized_counts.keys()):
+                    memberships[state] = normalized_counts[state]
                 else:
-                    output_dict[set].append("0")
-            output_dict[set] = "".join(output_dict[set])
+                    memberships[state] = 0
 
-        memberships = {}
-        for state in list(output_dict.values()):
-            if state in list(normalized_counts.keys()):
-                memberships[state] = normalized_counts[state]
-            else:
-                memberships[state] = 0
+            norm_memberships = memberships
+            if self.verbose:
+                print("Output Counts", memberships)
+            activation = {}
+            set_number = 0
+            for set in list(output_dict.keys()):
+                activation[set] = np.fmin(
+                    norm_memberships[output_dict[set]],
+                    self.output_fuzzyset[self.out_register_name][set_number],
+                )
+                set_number = set_number + 1
 
-        norm_memberships = memberships
-        if self.verbose:
-            print("Output Counts", memberships)
-        activation = {}
-        set_number = 0
-        for set in list(output_dict.keys()):
-            activation[set] = np.fmin(
-                norm_memberships[output_dict[set]],
-                self.output_fuzzyset[self.out_register_name][set_number],
+            activation_values = list(activation.values())[::-1]
+            aggregated = np.zeros(self.output_fuzzyset[self.out_register_name][0].shape)
+            for i in range(len(activation_values)):
+                aggregated = np.fmax(aggregated, activation_values[i])
+
+            return (
+                fuzz.defuzz(
+                    self.output_range[self.out_register_name], aggregated, "centroid"
+                ),
+                activation_values,
             )
-            set_number = set_number + 1
 
-        activation_values = list(activation.values())[::-1]
-        aggregated = np.zeros(self.output_fuzzyset[self.out_register_name][0].shape)
-        for i in range(len(activation_values)):
-            aggregated = np.fmax(aggregated, activation_values[i])
+        else:
+            # Distributed version
+            qc_labels = self.output_partition[list(self.output_fuzzyset.keys())[0]].sets
+            subcounts = {}
+            for label in qc_labels:
+                job = execute(self.qc[label], backend, shots=n_shots)
+                result = job.result()
+                subcounts[label] = result.get_counts()
+            self.counts_ = QFS.merge_subcounts(subcounts, self.output_partition[list(self.output_fuzzyset.keys())[0]])
+            if plot_histo:
+                plot_histogram(
+                    self.counts_, color="midnightblue", figsize=(7, 10)
+                ).show()
+            self.n_q = len(self.output_fuzzyset[list(self.output_fuzzyset.keys())[0]])
+            counts = self.counts_evaluator(n_qubits=self.n_q, counts=self.counts_)
+            # normalized_counts = {k: v / total for total in (sum(counts.values()),) for k, v in counts.items()}
+            normalized_counts = counts
+            output_dict = {
+                i: [] for i in self.output_partition[list(self.output_fuzzyset.keys())[0]].sets
+            }
+            counter = 0
+            for set in list(output_dict.keys()):
+                counter = counter + 1
+                for i in range(self.n_q):
+                    if i == self.n_q - counter:
+                        output_dict[set].append("1")
+                    else:
+                        output_dict[set].append("0")
+                output_dict[set] = "".join(output_dict[set])
 
-        return (
-            fuzz.defuzz(
-                self.output_range[self.out_register_name], aggregated, "centroid"
-            ),
-            activation_values,
-        )
+            memberships = {}
+            for state in list(output_dict.values()):
+                if state in list(normalized_counts.keys()):
+                    memberships[state] = normalized_counts[state]
+                else:
+                    memberships[state] = 0
+
+            norm_memberships = memberships
+            if self.verbose:
+                print("Output Counts", memberships)
+            activation = {}
+            set_number = 0
+            for set in list(output_dict.keys()):
+                activation[set] = np.fmin(
+                    norm_memberships[output_dict[set]],
+                    self.output_fuzzyset[list(self.output_fuzzyset.keys())[0]][set_number],
+                )
+                set_number = set_number + 1
+
+            activation_values = list(activation.values())[::-1]
+            aggregated = np.zeros(self.output_fuzzyset[list(self.output_fuzzyset.keys())[0]][0].shape)
+            for i in range(len(activation_values)):
+                aggregated = np.fmax(aggregated, activation_values[i])
+
+            return (
+                fuzz.defuzz(
+                    self.output_range[list(self.output_fuzzyset.keys())[0]], aggregated, "centroid"
+                ),
+                activation_values,
+            )
+
+
+
