@@ -40,3 +40,4 @@ class fuzzy_rules:
                     ]
                     # print(partition.associate_quantum_states())
         return converted_rule
+
