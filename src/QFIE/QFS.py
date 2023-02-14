@@ -65,17 +65,20 @@ def convert_rule(qc, fuzzy_rule, partitions, output_partition):
     rule = fp.fuzzy_rules().add_rules(fuzzy_rule, all_partition)
     controls = []
     targs = []
-    # print(fuzzy_rule)
-    # print(rule)
+    #print(fuzzy_rule)
+    #print(rule)
     for index in range(len(rule)):
         if rule[index] == "and" or rule[index] == "then":
             qr = select_qreg_by_name(qc, rule[index - 2])
             negation_0(qc, qr, rule[index - 1])
             # qc.x(qr[-1])
-            for i in range(select_qreg_by_name(qc, rule[index - 2]).size - 1):
-                # print(select_qreg_by_name(qc, rule[index-2])[i])
-                controls.append(select_qreg_by_name(qc, rule[index - 2])[i])
-            controls.append(qr[-1])
+            for i in range(select_qreg_by_name(qc, rule[index - 2]).size):
+                if len(rule[index-1]) > i:
+                    print(select_qreg_by_name(qc, rule[index-2])[i])
+                    controls.append(select_qreg_by_name(qc, rule[index - 2])[i])
+                else: break
+            #controls.append(qr[-1])
+            print(controls)
         if rule[index] == "then":
             # print(rule[index])
             # print(rule[index+2])
