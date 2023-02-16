@@ -74,11 +74,11 @@ def convert_rule(qc, fuzzy_rule, partitions, output_partition):
             # qc.x(qr[-1])
             for i in range(select_qreg_by_name(qc, rule[index - 2]).size):
                 if len(rule[index-1]) > i:
-                    print(select_qreg_by_name(qc, rule[index-2])[i])
+                    #print(select_qreg_by_name(qc, rule[index-2])[i])
                     controls.append(select_qreg_by_name(qc, rule[index - 2])[i])
                 else: break
             #controls.append(qr[-1])
-            print(controls)
+            #print(controls)
         if rule[index] == "then":
             # print(rule[index])
             # print(rule[index+2])
