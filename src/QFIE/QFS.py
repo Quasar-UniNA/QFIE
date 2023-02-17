@@ -37,6 +37,11 @@ def output_register(qc, output_partition):
     return qc
 
 
+def output_single_qubit_register(qc, name):
+    qc.add_register(QuantumRegister(1, name=name))
+    return qc
+
+
 def select_qreg_by_name(qc, name):
     """Function returning the quantum register in QC selected by name"""
     for qr in qc.qregs:
@@ -51,6 +56,23 @@ def negation_0(qc, qr, bit_string):
         if bit_string[index] == "0":
             qc.x(qr[index])
 
+def merge_subcounts(subcounts, output_partition):
+    merged_counts = {}
+    full_out_states = []
+    state = ["0" for _ in range(len(output_partition.sets))]
+    for i in range(len(output_partition.sets)):
+        state[-i-1] = "1"
+        key = "".join(bit for bit in state)
+        # TODO: reverse key string here in case of Qiskit ordering issues
+        full_out_states.append(key)
+        merged_counts[key] = 0
+        state[-i - 1] = "0"
+    for set in output_partition.sets:
+        try:
+            merged_counts[full_out_states[output_partition.sets.index(set)]] = subcounts[set]['1']
+        except KeyError:
+            pass
+    return merged_counts
 
 def convert_rule(qc, fuzzy_rule, partitions, output_partition):
     """Function which convert a fuzzy rule in the equivalent quantum circuit.
