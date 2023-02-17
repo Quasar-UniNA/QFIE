@@ -7,6 +7,7 @@ from . import fuzzy_partitions as fp
 
 Qregisters = []
 
+
 def generate_circuit(fuzzy_partitions):
     """Function generating a quantum circuit with width required by QFS"""
     qc = QuantumCircuit()
@@ -56,12 +57,13 @@ def negation_0(qc, qr, bit_string):
         if bit_string[index] == "0":
             qc.x(qr[index])
 
+
 def merge_subcounts(subcounts, output_partition):
     merged_counts = {}
     full_out_states = []
     state = ["0" for _ in range(len(output_partition.sets))]
     for i in range(len(output_partition.sets)):
-        state[-i-1] = "1"
+        state[-i - 1] = "1"
         key = "".join(bit for bit in state)
         # TODO: reverse key string here in case of Qiskit ordering issues
         full_out_states.append(key)
@@ -69,10 +71,13 @@ def merge_subcounts(subcounts, output_partition):
         state[-i - 1] = "0"
     for set in output_partition.sets:
         try:
-            merged_counts[full_out_states[output_partition.sets.index(set)]] = subcounts[set]['1']
+            merged_counts[
+                full_out_states[output_partition.sets.index(set)]
+            ] = subcounts[set]["1"]
         except KeyError:
             pass
     return merged_counts
+
 
 def convert_rule(qc, fuzzy_rule, partitions, output_partition):
     """Function which convert a fuzzy rule in the equivalent quantum circuit.
@@ -88,9 +93,10 @@ def convert_rule(qc, fuzzy_rule, partitions, output_partition):
             qr = select_qreg_by_name(qc, rule[index - 2])
             negation_0(qc, qr, rule[index - 1])
             for i in range(select_qreg_by_name(qc, rule[index - 2]).size):
-                if len(rule[index-1]) > i:
+                if len(rule[index - 1]) > i:
                     controls.append(select_qreg_by_name(qc, rule[index - 2])[i])
-                else: break
+                else:
+                    break
         if rule[index] == "then":
             targs.append(
                 select_qreg_by_name(qc, output_partition)[int(rule[index + 2][::-1], 2)]
@@ -101,5 +107,3 @@ def convert_rule(qc, fuzzy_rule, partitions, output_partition):
         if rule[index] == "and" or rule[index] == "then":
             qr = select_qreg_by_name(qc, rule[index - 2])
             negation_0(qc, qr, rule[index - 1])
-
-

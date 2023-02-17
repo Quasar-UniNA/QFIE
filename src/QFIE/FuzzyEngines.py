@@ -26,7 +26,7 @@ class QuantumFuzzyEngine:
 
     """
 
-    def __init__(self, verbose = True):
+    def __init__(self, verbose=True):
         self.input_ranges = {}
         self.output_range = {}
         self.input_fuzzysets = {}
@@ -86,7 +86,7 @@ class QuantumFuzzyEngine:
         self.input_partitions[var_name] = fp.fuzzy_partition(var_name, set_names)
 
     def add_output_fuzzysets(self, var_name, set_names, sets):
-        """ Set the partition for the output fuzzy variable 'var_name'.
+        """Set the partition for the output fuzzy variable 'var_name'.
         ...
         Args:
             param: var_name (str): name of the fuzzy variable defined with output_variable method previously.
@@ -173,8 +173,10 @@ class QuantumFuzzyEngine:
 
         return output
 
-    def build_inference_qc(self, input_values, distributed=False, draw_qc=False, **kwargs):
-        """ This function builds the quantum circuit implementing the QFIE, initializing the input quantum registers
+    def build_inference_qc(
+        self, input_values, distributed=False, draw_qc=False, **kwargs
+    ):
+        """This function builds the quantum circuit implementing the QFIE, initializing the input quantum registers
         according to the 'input_value' argument.
         ...
         Args:
@@ -207,8 +209,12 @@ class QuantumFuzzyEngine:
         # CIRCUIT SETUPS
         # Not Distributed QFIE
         if not distributed:
-            self.qc['full_circuit'] = QFS.generate_circuit(list(self.input_partitions.values()))
-            self.qc['full_circuit'] = QFS.output_register(self.qc['full_circuit'], list(self.output_partition.values())[0])
+            self.qc["full_circuit"] = QFS.generate_circuit(
+                list(self.input_partitions.values())
+            )
+            self.qc["full_circuit"] = QFS.output_register(
+                self.qc["full_circuit"], list(self.output_partition.values())[0]
+            )
         # Distributed QFIE
         else:
             self.out_register_name = []
@@ -216,7 +222,9 @@ class QuantumFuzzyEngine:
             qc_labels = self.output_partition[list(self.output_fuzzyset.keys())[0]].sets
             for label in qc_labels:
                 # Create a quantum circuit corresponding to each label
-                self.qc[label] = QFS.generate_circuit(list(self.input_partitions.values()))
+                self.qc[label] = QFS.generate_circuit(
+                    list(self.input_partitions.values())
+                )
                 self.qc[label] = QFS.output_single_qubit_register(self.qc[label], label)
                 # Create a subset of rules corresponding to each label
                 self.rule_subsets[label] = self.filter_rules(self.rules, label)
@@ -228,8 +236,10 @@ class QuantumFuzzyEngine:
                 math.sqrt(fuzzyfied_values[var_name][i])
                 for i in range(len(fuzzyfied_values[var_name]))
             ]
-            required_len = QFS.select_qreg_by_name(list(self.qc.values())[0], var_name).size
-            while len(initial_state[var_name]) != 2 ** required_len:
+            required_len = QFS.select_qreg_by_name(
+                list(self.qc.values())[0], var_name
+            ).size
+            while len(initial_state[var_name]) != 2**required_len:
                 initial_state[var_name].append(0)
             initial_state[var_name][-1] = math.sqrt(1 - sum(fuzzyfied_values[var_name]))
             for circ in list(self.qc.values()):
@@ -241,28 +251,35 @@ class QuantumFuzzyEngine:
         if not distributed:
             for rule in self.rules:
                 QFS.convert_rule(
-                    qc=self.qc['full_circuit'],
+                    qc=self.qc["full_circuit"],
                     fuzzy_rule=rule,
                     partitions=list(self.input_partitions.values()),
                     output_partition=list(self.output_partition.values())[0],
                 )
-                self.qc['full_circuit'].barrier()
+                self.qc["full_circuit"].barrier()
 
             self.out_register_name = list(self.output_fuzzyset.keys())[0]
             out = ClassicalRegister(len(self.output_fuzzyset[self.out_register_name]))
-            self.qc['full_circuit'].add_register(out)
-            self.qc['full_circuit'].measure(QFS.select_qreg_by_name(self.qc['full_circuit'], self.out_register_name), out)
+            self.qc["full_circuit"].add_register(out)
+            self.qc["full_circuit"].measure(
+                QFS.select_qreg_by_name(
+                    self.qc["full_circuit"], self.out_register_name
+                ),
+                out,
+            )
             if draw_qc:
-                if 'filename' in kwargs:
-                    self.qc['full_circuit'].draw("mpl", filename=kwargs['filename'])
+                if "filename" in kwargs:
+                    self.qc["full_circuit"].draw("mpl", filename=kwargs["filename"])
                 else:
-                    self.qc['full_circuit'].draw("mpl").show()
+                    self.qc["full_circuit"].draw("mpl").show()
         else:
             self.out_register_name = []
             # Use output linguistic terms as labels (keys) to identify the corresponding distributed circuits
             qc_labels = self.output_partition[list(self.output_fuzzyset.keys())[0]].sets
             for label in qc_labels:
-                modified_output_partition = deepcopy(list(self.output_partition.values())[0])
+                modified_output_partition = deepcopy(
+                    list(self.output_partition.values())[0]
+                )
                 modified_output_partition.sets = [label]
                 for rule in self.rule_subsets[label]:
                     QFS.convert_rule(
@@ -272,17 +289,20 @@ class QuantumFuzzyEngine:
                         output_partition=modified_output_partition,
                     )
                     self.qc[label].barrier()
-                self.out_register_name.append(list(self.output_fuzzyset.keys())[0] + " " + label)
+                self.out_register_name.append(
+                    list(self.output_fuzzyset.keys())[0] + " " + label
+                )
                 out = ClassicalRegister(1)
                 self.qc[label].add_register(out)
                 self.qc[label].measure(
-                    QFS.select_qreg_by_name(self.qc[label], self.out_register_name[-1]), out)
+                    QFS.select_qreg_by_name(self.qc[label], self.out_register_name[-1]),
+                    out,
+                )
                 if draw_qc:
                     self.qc[label].draw("mpl").show()
 
-
-    def execute(self, n_shots: int, plot_histo=False, GPU = False, **kwargs):
-        """ Run the inference engine.
+    def execute(self, n_shots: int, plot_histo=False, GPU=False, **kwargs):
+        """Run the inference engine.
         ...
         Args:
             param: n_shots (int): Number of shots.
@@ -296,25 +316,30 @@ class QuantumFuzzyEngine:
             Crisp output of the system.
         """
 
-        if 'backend' in kwargs:
-            backend = kwargs['backend']
+        if "backend" in kwargs:
+            backend = kwargs["backend"]
         else:
-            backend = BasicAer.get_backend('qasm_simulator')
+            backend = BasicAer.get_backend("qasm_simulator")
 
         if GPU:
             try:
-                backend.set_options(device='GPU')
-            except: print('Not possible use GPU for this quantum backend or your device is not equipped with GPUs')
+                backend.set_options(device="GPU")
+            except:
+                print(
+                    "Not possible use GPU for this quantum backend or your device is not equipped with GPUs"
+                )
 
         # COMPUTE NOT DISTRIBUTED ALGORITHM
         if len(self.qc) == 1:
-            if 'transpile_info' in kwargs and kwargs['transpile_info'] == True:
-                self.transpiled_qc = transpile(self.qc['full_circuit'], backend, optimization_level=3)
-                print('transpiled depth ', self.transpiled_qc.depth())
-                print('CNOTs number ', self.transpiled_qc.count_ops()['cx'])
+            if "transpile_info" in kwargs and kwargs["transpile_info"] == True:
+                self.transpiled_qc = transpile(
+                    self.qc["full_circuit"], backend, optimization_level=3
+                )
+                print("transpiled depth ", self.transpiled_qc.depth())
+                print("CNOTs number ", self.transpiled_qc.count_ops()["cx"])
                 job = execute(self.transpiled_qc, backend, shots=n_shots)
             else:
-                job = execute(self.qc['full_circuit'], backend, shots=n_shots)
+                job = execute(self.qc["full_circuit"], backend, shots=n_shots)
             if plot_histo:
                 plot_histogram(
                     job.result().get_counts(), color="midnightblue", figsize=(7, 10)
@@ -332,16 +357,25 @@ class QuantumFuzzyEngine:
             qc_labels = self.output_partition[list(self.output_fuzzyset.keys())[0]].sets
             subcounts = {}
             for label in qc_labels:
-                if 'transpile_info' in kwargs and kwargs['transpile_info'] == True:
-                    self.transpiled_qc = transpile(self.qc[label], backend, optimization_level=3)
-                    print('transpiled depth qc ' + str(label), self.transpiled_qc.depth())
-                    print('CNOTs number qc ' + str(label), self.transpiled_qc.count_ops()['cx'])
+                if "transpile_info" in kwargs and kwargs["transpile_info"] == True:
+                    self.transpiled_qc = transpile(
+                        self.qc[label], backend, optimization_level=3
+                    )
+                    print(
+                        "transpiled depth qc " + str(label), self.transpiled_qc.depth()
+                    )
+                    print(
+                        "CNOTs number qc " + str(label),
+                        self.transpiled_qc.count_ops()["cx"],
+                    )
                     job = execute(self.transpiled_qc, backend, shots=n_shots)
                 else:
                     job = execute(self.qc[label], backend, shots=n_shots)
                 result = job.result()
                 subcounts[label] = result.get_counts()
-            self.counts_ = QFS.merge_subcounts(subcounts, self.output_partition[list(self.output_fuzzyset.keys())[0]])
+            self.counts_ = QFS.merge_subcounts(
+                subcounts, self.output_partition[list(self.output_fuzzyset.keys())[0]]
+            )
             if plot_histo:
                 plot_histogram(
                     self.counts_, color="midnightblue", figsize=(7, 10)
@@ -350,7 +384,10 @@ class QuantumFuzzyEngine:
             counts = self.counts_evaluator(n_qubits=self.n_q, counts=self.counts_)
             normalized_counts = counts
             output_dict = {
-                i: [] for i in self.output_partition[list(self.output_fuzzyset.keys())[0]].sets
+                i: []
+                for i in self.output_partition[
+                    list(self.output_fuzzyset.keys())[0]
+                ].sets
             }
 
         counter = 0
@@ -384,16 +421,17 @@ class QuantumFuzzyEngine:
             set_number = set_number + 1
 
         activation_values = list(activation.values())[::-1]
-        aggregated = np.zeros(self.output_fuzzyset[list(self.output_fuzzyset.keys())[0]][0].shape)
+        aggregated = np.zeros(
+            self.output_fuzzyset[list(self.output_fuzzyset.keys())[0]][0].shape
+        )
         for i in range(len(activation_values)):
             aggregated = np.fmax(aggregated, activation_values[i])
 
         return (
             fuzz.defuzz(
-                self.output_range[list(self.output_fuzzyset.keys())[0]], aggregated, "centroid"
+                self.output_range[list(self.output_fuzzyset.keys())[0]],
+                aggregated,
+                "centroid",
             ),
             activation_values,
         )
-
-
-

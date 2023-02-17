@@ -36,4 +36,3 @@ class fuzzy_rules:
                         split[split.index(word) + 1]
                     ]
         return converted_rule
-
