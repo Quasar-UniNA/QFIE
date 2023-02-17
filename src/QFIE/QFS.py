@@ -11,7 +11,6 @@ def generate_circuit(fuzzy_partitions):
     """Function generating a quantum circuit with width required by QFS"""
     qc = QuantumCircuit()
     for partition in fuzzy_partitions:
-        # print(partition.len_partition(), partition.name)
         qc.add_register(
             QuantumRegister(
                 math.ceil(math.log(partition.len_partition() + 1, 2)),
@@ -59,42 +58,26 @@ def convert_rule(qc, fuzzy_rule, partitions, output_partition):
     rules."""
     all_partition = partitions.copy()
     all_partition.append(output_partition)
-    # print(output_partition)
-    # print(partitions)
-    # print(all_partition)
     rule = fp.fuzzy_rules().add_rules(fuzzy_rule, all_partition)
     controls = []
     targs = []
-    #print(fuzzy_rule)
-    #print(rule)
     for index in range(len(rule)):
         if rule[index] == "and" or rule[index] == "then":
             qr = select_qreg_by_name(qc, rule[index - 2])
             negation_0(qc, qr, rule[index - 1])
-            # qc.x(qr[-1])
             for i in range(select_qreg_by_name(qc, rule[index - 2]).size):
                 if len(rule[index-1]) > i:
-                    #print(select_qreg_by_name(qc, rule[index-2])[i])
                     controls.append(select_qreg_by_name(qc, rule[index - 2])[i])
                 else: break
-            #controls.append(qr[-1])
-            #print(controls)
         if rule[index] == "then":
-            # print(rule[index])
-            # print(rule[index+2])
-            # print('converted', int(rule[index+2],2))
             targs.append(
                 select_qreg_by_name(qc, output_partition)[int(rule[index + 2][::-1], 2)]
             )
-            # print(targs)
 
-    # print(controls, targs)
-    # scratch = select_qreg_by_name(qc, 'scratch')
     qc.mcx(controls, targs[0])
     for index in range(len(rule)):
         if rule[index] == "and" or rule[index] == "then":
             qr = select_qreg_by_name(qc, rule[index - 2])
             negation_0(qc, qr, rule[index - 1])
-            # qc.x(qr[-1])
 
 

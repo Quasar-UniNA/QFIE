@@ -10,10 +10,7 @@ class fuzzy_partition:
         return len(self.sets)
 
     def associate_quantum_states(self):
-        # print('len' , self.len_partition())
-        # print(math.log(len(self.sets)))
         len_state = math.ceil(math.log(self.len_partition(), 2))
-        # print('len_state ', len_state)
         binary_format = "{0:0" + str(len_state) + "b}"
         return {
             self.sets[i]: binary_format.format(i)[::-1] for i in range(len(self.sets))
@@ -38,5 +35,4 @@ class fuzzy_rules:
                     ] = partition.associate_quantum_states()[
                         split[split.index(word) + 1]
                     ]
-                    # print(partition.associate_quantum_states())
         return converted_rule

@@ -182,7 +182,6 @@ class QuantumFuzzyEngine:
                 )
                 for i in self.input_fuzzysets[var_name]
             ]
-            # norm_values[var_name] = [self.truncate(float(i)/sum(fuzzyfied_values[var_name]), 3) for i in fuzzyfied_values[var_name]]
         if self.verbose:
             print("Input values ", fuzzyfied_values)
         initial_state = {}
@@ -195,7 +194,6 @@ class QuantumFuzzyEngine:
             while len(initial_state[var_name]) != 2**required_len:
                 initial_state[var_name].append(0)
             initial_state[var_name][-1] = math.sqrt(1 - sum(fuzzyfied_values[var_name]))
-            # print(initial_state)
             self.qc.initialize(
                 initial_state[var_name], QFS.select_qreg_by_name(self.qc, var_name)
             )
@@ -263,7 +261,6 @@ class QuantumFuzzyEngine:
         counts_ = job.result().get_counts()
         self.n_q = len(self.output_fuzzyset[self.out_register_name])
         counts = self.counts_evaluator(n_qubits=self.n_q, counts=counts_)
-        # normalized_counts = {k: v / total for total in (sum(counts.values()),) for k, v in counts.items()}
         normalized_counts = counts
         output_dict = {
             i: [] for i in self.output_partition[self.out_register_name].sets
