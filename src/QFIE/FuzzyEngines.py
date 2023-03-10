@@ -10,6 +10,7 @@ from qiskit import (
 )
 from qiskit.visualization import plot_histogram
 from qiskit import transpile
+from itertools import cycle, islice
 
 from . import fuzzy_partitions as fp
 from . import QFS as QFS
@@ -41,11 +42,11 @@ class QuantumFuzzyEngine:
 
     def input_variable(self, name, range):
         """Define the input variable "name" of the system.
-        ...
+        
         Args:
-            param: name (str): Name of the variable as string.
-            param: range (np array): Universe of the discourse for the input variable.
-        ...
+             name (str): Name of the variable as string.
+             range (np array): Universe of the discourse for the input variable.
+        
         Returns:
             None
         """
@@ -58,11 +59,11 @@ class QuantumFuzzyEngine:
 
     def output_variable(self, name, range):
         """Define the output variable "name" of the system.
-        ...
+        
         Args:
-            param: name (str): Name of the variable as string.
-            param: range (np array): Universe of the discourse for the output variable.
-        ...
+             name (str): Name of the variable as string.
+             range (np array): Universe of the discourse for the output variable.
+        
         Returns:
             None
         """
@@ -72,12 +73,12 @@ class QuantumFuzzyEngine:
 
     def add_input_fuzzysets(self, var_name, set_names, sets):
         """Set the partition for the input fuzzy variable 'var_name'.
-        ...
+        
         Args:
-            param: var_name (str): name of the fuzzy variable defined with input_variable method previously.
-            param: set_names (list): list of fuzzy sets' name as str.
-            param: sets (list): list of scikit-fuzzy membership function objects.
-        ...
+             var_name (str): name of the fuzzy variable defined with input_variable method previously.
+             set_names (list): list of fuzzy sets' name as str.
+             sets (list): list of scikit-fuzzy membership function objects.
+        
         Returns:
             None
         """
@@ -87,11 +88,11 @@ class QuantumFuzzyEngine:
 
     def add_output_fuzzysets(self, var_name, set_names, sets):
         """Set the partition for the output fuzzy variable 'var_name'.
-        ...
+        
         Args:
-            param: var_name (str): name of the fuzzy variable defined with output_variable method previously.
-            param: set_names (list): list of fuzzy sets' name as str.
-            param: sets (list): list of scikit-fuzzy membership function objects.
+             var_name (str): name of the fuzzy variable defined with output_variable method previously.
+             set_names (list): list of fuzzy sets' name as str.
+             sets (list): list of scikit-fuzzy membership function objects.
         Returns:
             None
         """
@@ -101,11 +102,11 @@ class QuantumFuzzyEngine:
 
     def set_rules(self, rules):
         """Set the rule-base of the system. \n
-        Rules must be formatted as follows: 'if var_1 is x_i and var_2 is x_k and ... and var_n is x_l then out_1 is y_k'
-        ...
+        Rules must be formatted as follows: 'if var_1 is x_i and var_2 is x_k and  and var_n is x_l then out_1 is y_k'
+        
         Args:
-            param: rules (list): list of rules as strings.
-        ...
+             rules (list): list of rules as strings.
+        
         Returns:
             None
         """
@@ -113,7 +114,7 @@ class QuantumFuzzyEngine:
 
     def filter_rules(self, rules, output_term):
         """Searches the rule list and picks only the rules corresponding to the same output value (y_k at fixed k). \n
-        Rules must be formatted as follows: 'if var_1 is x_i and var_2 is x_k and ... and var_n is x_l then out_1 is y_k'
+        Rules must be formatted as follows: 'if var_1 is x_i and var_2 is x_k and  and var_n is x_l then out_1 is y_k'
 
         Args:
             rules (list): list of rules as strings.
@@ -134,11 +135,11 @@ class QuantumFuzzyEngine:
     def counts_evaluator(self, n_qubits, counts):
         """Function returning the alpha values for alpha-cutting the output fuzzy sets according to the
         probability of measuring the related basis states on the output quantum register.
-        ...
+        
         Args:
-            param: n_qubits (int): number of qubits in the output quantum register.
-            param: counts (dict): counting dictionary of the output quantum register measurement.
-        ...
+             n_qubits (int): number of qubits in the output quantum register.
+             counts (dict): counting dictionary of the output quantum register measurement.
+        
         Returns:
             alpha values for alpha-cutting the output fuzzy sets as 'dict'.
         """
@@ -178,17 +179,19 @@ class QuantumFuzzyEngine:
     ):
         """This function builds the quantum circuit implementing the QFIE, initializing the input quantum registers
         according to the 'input_value' argument.
-        ...
+        
         Args:
-            :param input_values (dict): dictionary containing the crisp input values of the system.
-                E.g. {'var_name_1' (str): x_1 (float), ..., 'var_name_n' (str): x_n (float)}
-            :param draw_qc (Bool - default:False): True for drawing the quantum circuit built. False otherwise.
-            :param distributed (Boolean): True to implement the distributed version of the quantum oracle. False otherwise.
-            :keyword: filename (str): file path to save image to.
-        ...
+             input_values (dict): dictionary containing the crisp input values of the system.
+                E.g. {'var_name_1' (str): x_1 (float), , 'var_name_n' (str): x_n (float)}
+             draw_qc (Bool - default:False): True for drawing the quantum circuit built. False otherwise.
+             distributed (Boolean): True to implement the distributed version of the quantum oracle. False otherwise.
+            :keyword filename (str): file path to save image to.
+        
         Returns:
             None
         """
+        self.distributed = distributed
+
         # Print Crisp Inputs
         if self.verbose:
             print(input_values)
@@ -303,23 +306,30 @@ class QuantumFuzzyEngine:
 
     def execute(self, n_shots: int, plot_histo=False, GPU=False, **kwargs):
         """Run the inference engine.
-        ...
+        
         Args:
-            param: n_shots (int): Number of shots.
-            param: plot_histo (Bool- default False): True for plotting the counts histogram.
-            param: GPU (Bool- default False): True for using GPU for simulation. Use False if backend is a real device.
+             n_shots (int): Number of shots.
+             plot_histo (Bool- default False): True for plotting the counts histogram.
+             GPU (Bool- default False): True for using GPU for simulation. Use False if backend is a real device.
 
-            keyword: backend: quantum backend to run the quantum circuit. If not specified, qasm simulator is used.
-            keyword: transpile_info (bool - default False): True for getting information about transpiled qc
-        ...
+            :keyword backend: quantum backend to run the quantum circuit. If not specified, qasm simulator is used.
+            :keyword transpile_info (bool - default False): True for getting information about transpiled qc
+        
         Return:
             Crisp output of the system.
         """
-
+        # Selecting the backend
         if "backend" in kwargs:
             backend = kwargs["backend"]
         else:
             backend = BasicAer.get_backend("qasm_simulator")
+
+
+        # Creating backend list if QFIE is distributed:
+        if self.distributed:
+            if type(backend) != list: backends_list=[backend]
+            else: backends_list = backend
+            backends_list = list(islice(cycle(backends_list), len(list(self.qc.keys()))))
 
         if GPU:
             try:
@@ -331,6 +341,8 @@ class QuantumFuzzyEngine:
 
         # COMPUTE NOT DISTRIBUTED ALGORITHM
         if len(self.qc) == 1:
+            if type(backend) == list:
+                raise 'Please to run the not distributed quantum circuit specify an unique backend not as list'
             if "transpile_info" in kwargs and kwargs["transpile_info"] == True:
                 self.transpiled_qc = transpile(
                     self.qc["full_circuit"], backend, optimization_level=3
@@ -356,7 +368,13 @@ class QuantumFuzzyEngine:
             # Distributed version
             qc_labels = self.output_partition[list(self.output_fuzzyset.keys())[0]].sets
             subcounts = {}
+            counter = 0
             for label in qc_labels:
+                backend = backends_list[counter]
+                if self.verbose:
+                    try: backend_name = backend.backend_name
+                    except: backend_name = backend.DEFAULT_CONFIGURATION['backend_name']
+                    print('Running qc ' + label + ' on ' + backend_name)
                 if "transpile_info" in kwargs and kwargs["transpile_info"] == True:
                     self.transpiled_qc = transpile(
                         self.qc[label], backend, optimization_level=3
@@ -373,6 +391,7 @@ class QuantumFuzzyEngine:
                     job = execute(self.qc[label], backend, shots=n_shots)
                 result = job.result()
                 subcounts[label] = result.get_counts()
+                counter = counter + 1
             self.counts_ = QFS.merge_subcounts(
                 subcounts, self.output_partition[list(self.output_fuzzyset.keys())[0]]
             )
