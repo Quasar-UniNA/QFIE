@@ -33,6 +33,9 @@ Motivation
     1. QFIE for controlling a Fan Speed System
     2. QFIE for Lighting Control.
 
+- The main changes of QFIE v.1.1.0 can be seen in the notebook jupyter:
+    3. QFIE_v_1_1_0.ipynb
+
 How to cite ``QFIE``?
 =============================
 
@@ -64,6 +67,7 @@ Bibtex:
 
    Fan_Speed_Control
    Lighting_Control
+   QFIE_v_1_1_0
 
 
 Indices and tables
