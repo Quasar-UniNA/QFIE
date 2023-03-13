@@ -1,7 +1,10 @@
 from qiskit import (
     QuantumCircuit,
     QuantumRegister,
+    transpile,
+    execute
 )
+
 import math
 from . import fuzzy_partitions as fp
 
@@ -107,3 +110,45 @@ def convert_rule(qc, fuzzy_rule, partitions, output_partition):
         if rule[index] == "and" or rule[index] == "then":
             qr = select_qreg_by_name(qc, rule[index - 2])
             negation_0(qc, qr, rule[index - 1])
+
+
+
+def compute_qc(backend, qc,  qc_label, n_shots, verbose=True, transpilation_info=False):
+    f""" Function computing the quantum circuit qc named qc_label on a backend
+     
+     Args:
+          backend: quantum backend to run the quantum circuit.
+          qc (QuantumCircuit): quantum circuit to execute;
+          qc_label (str): quantum circuit label;
+          n_shots (int): Number of shots;
+          verbose (Bool): True to see detail of execution;
+          transpilation_info (Bool): True to get information about transpiled qc. If true, the transpiled qc will be 
+            used for the execution. 
+            
+     Return:
+         A dictionary with qc_label as key and counts as value.
+            
+          """
+    if verbose:
+        try:
+            backend_name = backend.backend_name
+        except:
+            backend_name = backend.DEFAULT_CONFIGURATION['backend_name']
+        print('Running qc ' + qc_label + ' on ' + backend_name)
+    if transpilation_info:
+        transpiled_qc = transpile(
+            qc, backend, optimization_level=3
+        )
+        print(
+            "transpiled depth qc " + str(qc_label), transpiled_qc.depth()
+        )
+        print(
+            "CNOTs number qc " + str(qc_label),
+            transpiled_qc.count_ops()["cx"],
+        )
+        job = execute(transpiled_qc, backend, shots=n_shots)
+    else:
+        job = execute(qc, backend, shots=n_shots)
+    result = job.result()
+
+    return {qc_label:result.get_counts()}

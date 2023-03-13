@@ -10,7 +10,10 @@ from qiskit import (
 )
 from qiskit.visualization import plot_histogram
 from qiskit import transpile
-from itertools import cycle, islice
+from itertools import cycle, islice, repeat
+from  concurrent.futures import ThreadPoolExecutor
+import time
+
 
 from . import fuzzy_partitions as fp
 from . import QFS as QFS
@@ -324,6 +327,10 @@ class QuantumFuzzyEngine:
         else:
             backend = BasicAer.get_backend("qasm_simulator")
 
+        #Checking Transpilation Command
+        if "transpile_info" in kwargs and kwargs["transpile_info"] == True: transp_info = True
+        else: transp_info = False
+
 
         # Creating backend list if QFIE is distributed:
         if self.distributed:
@@ -343,71 +350,43 @@ class QuantumFuzzyEngine:
         if len(self.qc) == 1:
             if type(backend) == list:
                 raise 'Please to run the not distributed quantum circuit specify an unique backend not as list'
-            if "transpile_info" in kwargs and kwargs["transpile_info"] == True:
-                self.transpiled_qc = transpile(
-                    self.qc["full_circuit"], backend, optimization_level=3
-                )
-                print("transpiled depth ", self.transpiled_qc.depth())
-                print("CNOTs number ", self.transpiled_qc.count_ops()["cx"])
-                job = execute(self.transpiled_qc, backend, shots=n_shots)
-            else:
-                job = execute(self.qc["full_circuit"], backend, shots=n_shots)
-            if plot_histo:
-                plot_histogram(
-                    job.result().get_counts(), color="midnightblue", figsize=(7, 10)
-                ).show()
-            self.counts_ = job.result().get_counts()
-            self.n_q = len(self.output_fuzzyset[self.out_register_name])
-            counts = self.counts_evaluator(n_qubits=self.n_q, counts=self.counts_)
-            normalized_counts = counts
-            output_dict = {
-                i: [] for i in self.output_partition[self.out_register_name].sets
-            }
+
+            # Execute quantum circuit
+            self.counts_ = list(QFS.compute_qc(backend, self.qc["full_circuit"], "full_circuit", n_shots, self.verbose, transp_info).values())[0]
+
         # COMPUTE DISTRIBUTED ALGORITHM
         else:
             # Distributed version
-            qc_labels = self.output_partition[list(self.output_fuzzyset.keys())[0]].sets
             subcounts = {}
-            counter = 0
-            for label in qc_labels:
-                backend = backends_list[counter]
-                if self.verbose:
-                    try: backend_name = backend.backend_name
-                    except: backend_name = backend.DEFAULT_CONFIGURATION['backend_name']
-                    print('Running qc ' + label + ' on ' + backend_name)
-                if "transpile_info" in kwargs and kwargs["transpile_info"] == True:
-                    self.transpiled_qc = transpile(
-                        self.qc[label], backend, optimization_level=3
-                    )
-                    print(
-                        "transpiled depth qc " + str(label), self.transpiled_qc.depth()
-                    )
-                    print(
-                        "CNOTs number qc " + str(label),
-                        self.transpiled_qc.count_ops()["cx"],
-                    )
-                    job = execute(self.transpiled_qc, backend, shots=n_shots)
-                else:
-                    job = execute(self.qc[label], backend, shots=n_shots)
-                result = job.result()
-                subcounts[label] = result.get_counts()
-                counter = counter + 1
+
+            # Execute quantum circuits
+            counts_list = list(map(QFS.compute_qc, backends_list,
+                                                                list(self.qc.values()), list(self.qc.keys()),
+                                                                repeat(n_shots), repeat(self.verbose),
+                                                                repeat(transp_info)))
+
+            for count in counts_list:
+                subcounts.update(count)
+
             self.counts_ = QFS.merge_subcounts(
                 subcounts, self.output_partition[list(self.output_fuzzyset.keys())[0]]
             )
-            if plot_histo:
-                plot_histogram(
-                    self.counts_, color="midnightblue", figsize=(7, 10)
-                ).show()
-            self.n_q = len(self.output_fuzzyset[list(self.output_fuzzyset.keys())[0]])
-            counts = self.counts_evaluator(n_qubits=self.n_q, counts=self.counts_)
-            normalized_counts = counts
-            output_dict = {
-                i: []
-                for i in self.output_partition[
-                    list(self.output_fuzzyset.keys())[0]
-                ].sets
-            }
+
+        # Plot Counts
+        if plot_histo:
+            plot_histogram(
+                self.counts_, color="midnightblue", figsize=(7, 10)
+            ).show()
+
+        self.n_q = len(self.output_fuzzyset[list(self.output_fuzzyset.keys())[0]])
+        counts = self.counts_evaluator(n_qubits=self.n_q, counts=self.counts_)
+        normalized_counts = counts
+        output_dict = {
+            i: []
+            for i in self.output_partition[
+                list(self.output_fuzzyset.keys())[0]
+            ].sets
+        }
 
         counter = 0
         for set in list(output_dict.keys()):
