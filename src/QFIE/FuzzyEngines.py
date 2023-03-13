@@ -201,7 +201,6 @@ class QuantumFuzzyEngine:
 
         # FUZZIFICATION
         fuzzyfied_values = {}
-        norm_values = {}
         for var_name in list(input_values.keys()):
             fuzzyfied_values[var_name] = [
                 fuzz.interp_membership(
@@ -275,7 +274,7 @@ class QuantumFuzzyEngine:
             )
             if draw_qc:
                 if "filename" in kwargs:
-                    self.qc["full_circuit"].draw("mpl", filename=kwargs["filename"])
+                    self.qc["full_circuit"].draw("mpl", filename=kwargs["filename"]).show()
                 else:
                     self.qc["full_circuit"].draw("mpl").show()
         else:
@@ -305,7 +304,11 @@ class QuantumFuzzyEngine:
                     out,
                 )
                 if draw_qc:
-                    self.qc[label].draw("mpl").show()
+                    #self.qc[label].draw("mpl").show()
+                    if "filename" in kwargs:
+                        self.qc[label].draw("mpl", filename=label+'_'+kwargs["filename"]).show()
+                    else:
+                        self.qc[label].draw("mpl").show()
 
     def execute(self, n_shots: int, plot_histo=False, GPU=False, **kwargs):
         """Run the inference engine.
