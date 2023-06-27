@@ -18,6 +18,7 @@ def read_fis_file(file):
             elif '.' in value and all(c.isdigit() for c in value.replace('.', '', 1)):
                 dict_[key] = float(value)
             else:
+
                 dict_[key] = value.strip("'")
         return dict_
 
@@ -27,14 +28,18 @@ def read_fis_file(file):
         for i in range(1,n_mfs+1):
             string = dict_['MF'+str(i)]
             # Extract the values using regular expressions
-            values = re.findall(r"[\w-]+", string)
+            values = re.findall(r"[\w.-]+", string)
+
             # Process the extracted values
-            output = [values[0].replace("'", "",1), values[1].replace("'", "",1), [int(num) for num in values[2:]]]
+            output = [values[0].replace("'", "",1), values[1].replace("'", "",1), [float(num) for num in values[2:]]]
+
             if output[1]=='trimf':
                 out_dict[output[0]]=fuzz.trimf(val_range, output[-1])
+            if output[1]=='trapmf':
+                out_dict[output[0]]=fuzz.trapmf(val_range, output[-1])
         return out_dict
 
-    def plt_mf(fis, range_, mem, n, title):
+    def plt_mf(fis, range_, mem, n):
         # Visualize these universes and membership functions
         if n>1: fig, axes = plt.subplots(nrows=n, figsize=(8, 12))
         else: fig, ax = plt.subplots()
@@ -50,7 +55,6 @@ def read_fis_file(file):
                 ax.get_xaxis().tick_bottom()
                 ax.get_yaxis().tick_left()
         else:
-            print('ciao')
             for mf in list(mem[fis[0]['Name']].keys()):
                 ax.plot(range_[fis[0]['Name']], mem[fis[0]['Name']][mf], linewidth=1.5,
                         label=mf)
@@ -62,7 +66,6 @@ def read_fis_file(file):
             ax.get_yaxis().tick_left()
 
 
-        plt.title(title)
         plt.show()
 
 
@@ -92,9 +95,8 @@ def read_fis_file(file):
             input_mem[input_fis[i]['Name']] = get_mf(input_fis[i], input_ranges[input_fis[i]['Name']])
         for i in range(n_outputs):
             output_mem[output_fis[i]['Name']] = get_mf(output_fis[i], output_ranges[output_fis[i]['Name']])
-
-        plt_mf(input_fis, mem=input_mem, range_=input_ranges, n=n_inputs, title='Input Variables')
-        plt_mf(output_fis, mem=output_mem, range_=output_ranges, n=n_outputs, title='Output Variables')
+        plt_mf(input_fis, mem=input_mem, range_=input_ranges, n=n_inputs)
+        plt_mf(output_fis, mem=output_mem, range_=output_ranges, n=n_outputs)
 
         qfie = fe.QuantumFuzzyEngine(verbose=False)
 
@@ -129,7 +131,6 @@ def read_fis_file(file):
             name = output_fis[_]['Name']
             output_names.append(name)
             mf_output_names.append(list(output_mem[name].keys()))
-
         for rule in rules_as_list:
             l_rule = 'if '
             for i in range(n_inputs):
@@ -138,9 +139,9 @@ def read_fis_file(file):
                     l_rule = l_rule+ ' and '
                 else:
                     l_rule = l_rule + ' then '
-            for o in range(n_inputs):
+            for o in range(n_outputs):
                 l_rule = l_rule + output_names[o] + ' is ' + mf_output_names[o][rule[n_inputs+o]-1]
-                if i != n_inputs-1:
+                if o != n_outputs-1:
                     l_rule = l_rule+ ' and '
                 else:
                     break
@@ -149,6 +150,6 @@ def read_fis_file(file):
         qfie.set_rules(linguistic_rules)
 
 
-    return qfie
+    return qfie, input_mem
 
-qfie= read_fis_file('prova.fis')
+qfie, im= read_fis_file('/Users/rschiattarella/Downloads/selectroad.fis')
