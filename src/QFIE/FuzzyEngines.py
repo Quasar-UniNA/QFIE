@@ -11,7 +11,7 @@ from qiskit import (
 from qiskit.visualization import plot_histogram
 from qiskit import transpile
 from itertools import cycle, islice, repeat
-from  concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 import time
 
 
