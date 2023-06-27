@@ -152,4 +152,3 @@ def read_fis_file(file):
 
     return qfie, input_mem
 
-qfie, im= read_fis_file('/Users/rschiattarella/Downloads/selectroad.fis')
