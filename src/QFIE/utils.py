@@ -1,4 +1,4 @@
-import QFIE.FuzzyEngines as fe
+import src.QFIE.FuzzyEngines as fe
 from itertools import groupby
 import re
 import numpy as np
@@ -8,6 +8,14 @@ import matplotlib.pyplot as plt
 
 
 def read_fis_file(file):
+    """ Define a QuantumFuzzyEngine object from a .fis file.
+
+        Args:
+             name (str): .fis file.
+
+        Returns:
+            QuantumFuzzyEngine Object
+        """
     def from_list_to_dict(fis_group):
         dict_ = {}
         for item in fis_group[1:]:
@@ -150,5 +158,8 @@ def read_fis_file(file):
         qfie.set_rules(linguistic_rules)
 
 
-    return qfie, input_mem
+    return qfie
 
+fis = read_fis_file('/Users/rschiattarella/Downloads/greentime.fis')
+fis.build_inference_qc(input_values={'road1':20, 'road2':20, 'road3':20, 'road4':20})
+print(fis.execute(1000)[0])
