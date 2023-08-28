@@ -160,6 +160,6 @@ def read_fis_file(file):
 
     return qfie
 
-fis = read_fis_file('/Users/rschiattarella/Downloads/greentime.fis')
-fis.build_inference_qc(input_values={'road1':20, 'road2':20, 'road3':20, 'road4':20})
-print(fis.execute(1000)[0])
+#fis = read_fis_file('/Users/rschiattarella/Library/CloudStorage/OneDrive-UniversitàdiNapoliFedericoII/Projects/fujitsu_challenge/greentime.fis')
+#fis.build_inference_qc(input_values={'road1':20, 'road2':20, 'road3':20, 'road4':20})
+#print(fis.execute(1000)[0])
