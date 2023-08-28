@@ -9,11 +9,12 @@ from . import FuzzyEngines as fe
 
 
 
-def read_fis_file(file):
+def read_fis_file(file, verbose=False):
     """ Define a QuantumFuzzyEngine object from a .fis file.
 
         Args:
              name (str): .fis file.
+             verbose (bool): True to graphically show the input and output fuzzy variables in the .fis file.
 
         Returns:
             QuantumFuzzyEngine Object
@@ -105,8 +106,9 @@ def read_fis_file(file):
             input_mem[input_fis[i]['Name']] = get_mf(input_fis[i], input_ranges[input_fis[i]['Name']])
         for i in range(n_outputs):
             output_mem[output_fis[i]['Name']] = get_mf(output_fis[i], output_ranges[output_fis[i]['Name']])
-        plt_mf(input_fis, mem=input_mem, range_=input_ranges, n=n_inputs)
-        plt_mf(output_fis, mem=output_mem, range_=output_ranges, n=n_outputs)
+        if verbose:
+            plt_mf(input_fis, mem=input_mem, range_=input_ranges, n=n_inputs)
+            plt_mf(output_fis, mem=output_mem, range_=output_ranges, n=n_outputs)
 
         qfie = fe.QuantumFuzzyEngine(verbose=False)
 
