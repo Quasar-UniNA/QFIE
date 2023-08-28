@@ -1,9 +1,11 @@
-import src.QFIE.FuzzyEngines as fe
 from itertools import groupby
 import re
 import numpy as np
 import skfuzzy as fuzz
 import matplotlib.pyplot as plt
+from . import FuzzyEngines as fe
+
+
 
 
 
@@ -160,6 +162,3 @@ def read_fis_file(file):
 
     return qfie
 
-#fis = read_fis_file('/Users/rschiattarella/Library/CloudStorage/OneDrive-UniversitàdiNapoliFedericoII/Projects/fujitsu_challenge/greentime.fis')
-#fis.build_inference_qc(input_values={'road1':20, 'road2':20, 'road3':20, 'road4':20})
-#print(fis.execute(1000)[0])
