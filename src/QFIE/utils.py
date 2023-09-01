@@ -96,10 +96,10 @@ def read_fis_file(file, verbose=False):
                 output_fis.append(from_list_to_dict(x))
             if x[0][:3]=='[Ru':
                 rules=x
-        input_ranges = {input_fis[i]['Name']:np.linspace(int(input_fis[i]['Range'].strip('[]').split()[0]),
-                                    int(input_fis[i]['Range'].strip('[]').split()[1]), 200) for i in range(len(input_fis))}
-        output_ranges = {output_fis[i]['Name']: np.linspace(int(output_fis[i]['Range'].strip('[]').split()[0]),
-                                    int(output_fis[i]['Range'].strip('[]').split()[1]), 200) for i in
+        input_ranges = {input_fis[i]['Name']:np.linspace(float(input_fis[i]['Range'].strip('[]').split()[0]),
+                                    float(input_fis[i]['Range'].strip('[]').split()[1]), 200) for i in range(len(input_fis))}
+        output_ranges = {output_fis[i]['Name']: np.linspace(float(output_fis[i]['Range'].strip('[]').split()[0]),
+                                    float(output_fis[i]['Range'].strip('[]').split()[1]), 200) for i in
                         range(len(output_fis))}
         input_mem,output_mem = {},{}
         for i in range(n_inputs):
