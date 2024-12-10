@@ -5,9 +5,8 @@ import math
 from copy import deepcopy
 from qiskit import (
     ClassicalRegister,
-    execute,
-    BasicAer,
 )
+from qiskit_aer import AerSimulator
 from qiskit.visualization import plot_histogram
 from qiskit import transpile
 from itertools import cycle, islice, repeat
@@ -17,7 +16,8 @@ import time
 
 from . import fuzzy_partitions as fp
 from . import QFS as QFS
-
+#import fuzzy_partitions as fp
+#import QFS as QFS
 
 class QuantumFuzzyEngine:
     """
@@ -273,9 +273,11 @@ class QuantumFuzzyEngine:
                 out,
             )
             if draw_qc:
+                print('draw')
                 if "filename" in kwargs:
-                    self.qc["full_circuit"].draw("mpl", filename=kwargs["filename"]).show()
+                    self.qc["full_circuit"].draw("mpl", filename=kwargs["filename"])
                 else:
+                    print('draw1')
                     self.qc["full_circuit"].draw("mpl").show()
         else:
             self.out_register_name = []
@@ -306,9 +308,9 @@ class QuantumFuzzyEngine:
                 if draw_qc:
                     #self.qc[label].draw("mpl").show()
                     if "filename" in kwargs:
-                        self.qc[label].draw("mpl", filename=label+'_'+kwargs["filename"]).show()
+                        self.qc[label].draw("mpl", filename=label+'_'+kwargs["filename"])
                     else:
-                        self.qc[label].draw("mpl").show()
+                        self.qc[label].draw("mpl")
 
     def execute(self, n_shots: int, plot_histo=False, GPU=False, **kwargs):
         """Run the inference engine.
@@ -320,7 +322,8 @@ class QuantumFuzzyEngine:
 
             :keyword backend: quantum backend to run the quantum circuit. If not specified, qasm simulator is used.
             :keyword transpile_info (bool - default False): True for getting information about transpiled qc
-        
+            :keyword optimization_level (int - default 3): Select a Value from 1 to 3 to set the optimization level in the transpiling
+            :keyword defuzzification (str): name of the Defuzzification algorithm to use. If not specified, 'centroid' is used. 
         Return:
             Crisp output of the system.
         """
@@ -328,11 +331,16 @@ class QuantumFuzzyEngine:
         if "backend" in kwargs:
             backend = kwargs["backend"]
         else:
-            backend = BasicAer.get_backend("qasm_simulator")
+            backend = AerSimulator()
 
         #Checking Transpilation Command
         if "transpile_info" in kwargs and kwargs["transpile_info"] == True: transp_info = True
         else: transp_info = False
+
+        if "optimization_level" in kwargs and kwargs["optimization_level"] != 3: optimization_level = kwargs["optimization_level"]
+        else: optimization_level = 3
+
+
 
 
         # Creating backend list if QFIE is distributed:
@@ -355,7 +363,7 @@ class QuantumFuzzyEngine:
                 raise 'Please to run the not distributed quantum circuit specify an unique backend not as list'
 
             # Execute quantum circuit
-            self.counts_ = list(QFS.compute_qc(backend, self.qc["full_circuit"], "full_circuit", n_shots, self.verbose, transp_info).values())[0]
+            self.counts_ = list(QFS.compute_qc(backend, self.qc["full_circuit"], "full_circuit", n_shots, self.verbose, transpilation_info=transp_info, optimization_level=optimization_level).values())[0]
 
         # COMPUTE DISTRIBUTED ALGORITHM
         else:
@@ -366,7 +374,7 @@ class QuantumFuzzyEngine:
             counts_list = list(map(QFS.compute_qc, backends_list,
                                                                 list(self.qc.values()), list(self.qc.keys()),
                                                                 repeat(n_shots), repeat(self.verbose),
-                                                                repeat(transp_info)))
+                                                                repeat(transp_info), repeat(optimization_level)))
 
             for count in counts_list:
                 subcounts.update(count)
@@ -409,6 +417,10 @@ class QuantumFuzzyEngine:
                 memberships[state] = 0
 
         # DEFUZZIFICATION
+        if "defuzzification" in kwargs:
+            defuzz = kwargs["defuzzification"]
+        else: defuzz = 'centroid'
+
         norm_memberships = memberships
         if self.verbose:
             print("Output Counts", memberships)
@@ -432,7 +444,7 @@ class QuantumFuzzyEngine:
             fuzz.defuzz(
                 self.output_range[list(self.output_fuzzyset.keys())[0]],
                 aggregated,
-                "centroid",
+                defuzz,
             ),
             activation_values,
         )

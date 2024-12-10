@@ -1,12 +1,13 @@
 from qiskit import (
     QuantumCircuit,
     QuantumRegister,
-    transpile,
-    execute
 )
+from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
+from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 
 import math
 from . import fuzzy_partitions as fp
+#import fuzzy_partitions as fp
 
 Qregisters = []
 
@@ -113,7 +114,7 @@ def convert_rule(qc, fuzzy_rule, partitions, output_partition):
 
 
 
-def compute_qc(backend, qc,  qc_label, n_shots, verbose=True, transpilation_info=False):
+def compute_qc(backend, qc,  qc_label, n_shots, verbose=True,  transpilation_info=False, optimization_level=3):
     f""" Function computing the quantum circuit qc named qc_label on a backend
      
      Args:
@@ -122,8 +123,7 @@ def compute_qc(backend, qc,  qc_label, n_shots, verbose=True, transpilation_info
           qc_label (str): quantum circuit label;
           n_shots (int): Number of shots;
           verbose (Bool): True to see detail of execution;
-          transpilation_info (Bool): True to get information about transpiled qc. If true, the transpiled qc will be 
-            used for the execution. 
+          transpilation_info (Bool): True to get information about transpiled qc.
             
      Return:
          A dictionary with qc_label as key and counts as value.
@@ -133,22 +133,31 @@ def compute_qc(backend, qc,  qc_label, n_shots, verbose=True, transpilation_info
         try:
             backend_name = backend.backend_name
         except:
-            backend_name = backend.DEFAULT_CONFIGURATION['backend_name']
+            try: backend_name = backend.DEFAULT_CONFIGURATION['backend_name']
+            except: backend_name = 'AerSimulator'
         print('Running qc ' + qc_label + ' on ' + backend_name)
+        
+
+    pm = generate_preset_pass_manager(backend=backend, optimization_level=optimization_level)
+    print('debug', str(optimization_level))
+    transpiled_qc = pm.run(qc)
     if transpilation_info:
-        transpiled_qc = transpile(
-            qc, backend, optimization_level=3
-        )
         print(
             "transpiled depth qc " + str(qc_label), transpiled_qc.depth()
         )
         print(
-            "CNOTs number qc " + str(qc_label),
-            transpiled_qc.count_ops()["cx"],
+            "Operations " + str(qc_label),
+            transpiled_qc.count_ops(),
         )
-        job = execute(transpiled_qc, backend, shots=n_shots)
-    else:
-        job = execute(qc, backend, shots=n_shots)
-    result = job.result()
 
-    return {qc_label:result.get_counts()}
+    sampler = SamplerV2(backend)
+    job = sampler.run([transpiled_qc], shots=n_shots)
+    job_result = job.result()
+    
+    values = job_result[0].data._data.values()
+    counts = list(values)[0].get_counts()
+
+
+    return {qc_label:counts}
+
+
