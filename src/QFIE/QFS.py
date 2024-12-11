@@ -6,28 +6,42 @@ from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 
 import math
-from . import fuzzy_partitions as fp
-#import fuzzy_partitions as fp
+#from . import fuzzy_partitions as fp
+import fuzzy_partitions as fp
 
 Qregisters = []
 
 
-def generate_circuit(fuzzy_partitions):
+def generate_circuit(fuzzy_partitions, encoding='logaritmic'):
     """Function generating a quantum circuit with width required by QFS"""
     qc = QuantumCircuit()
     for partition in fuzzy_partitions:
-        qc.add_register(
-            QuantumRegister(
-                math.ceil(math.log(partition.len_partition() + 1, 2)),
-                name=partition.name,
+        if encoding=='logaritmic':
+            qc.add_register(
+                QuantumRegister(
+                    math.ceil(math.log(partition.len_partition() + 1, 2)),
+                    name=partition.name,
+                )
             )
-        )
-        Qregisters.append(
-            QuantumRegister(
-                math.ceil(math.log(partition.len_partition() + 1, 2)),
-                name=partition.name,
+            Qregisters.append(
+                QuantumRegister(
+                    math.ceil(math.log(partition.len_partition() + 1, 2)),
+                    name=partition.name,
+                )
             )
-        )
+        if encoding == 'linear':
+            qc.add_register(
+                QuantumRegister(
+                    partition.len_partition(),
+                    name=partition.name,
+                )
+            )
+            Qregisters.append(
+                QuantumRegister(
+                    partition.len_partition(),
+                    name=partition.name,
+                )
+            )
 
     return qc
 
@@ -83,7 +97,7 @@ def merge_subcounts(subcounts, output_partition):
     return merged_counts
 
 
-def convert_rule(qc, fuzzy_rule, partitions, output_partition):
+def convert_rule(qc, fuzzy_rule, partitions, output_partition, encoding='logaritmic'):
     """Function which convert a fuzzy rule in the equivalent quantum circuit.
     You can use multiple times convert_rule to concatenate the quantum circuits related to different
     rules."""
@@ -92,25 +106,36 @@ def convert_rule(qc, fuzzy_rule, partitions, output_partition):
     rule = fp.fuzzy_rules().add_rules(fuzzy_rule, all_partition)
     controls = []
     targs = []
-    for index in range(len(rule)):
-        if rule[index] == "and" or rule[index] == "then":
-            qr = select_qreg_by_name(qc, rule[index - 2])
-            negation_0(qc, qr, rule[index - 1])
-            for i in range(select_qreg_by_name(qc, rule[index - 2]).size):
-                if len(rule[index - 1]) > i:
-                    controls.append(select_qreg_by_name(qc, rule[index - 2])[i])
-                else:
-                    break
-        if rule[index] == "then":
-            targs.append(
-                select_qreg_by_name(qc, output_partition)[int(rule[index + 2][::-1], 2)]
-            )
+    if encoding == 'logaritmic':
+        for index in range(len(rule)):
+            if rule[index] == "and" or rule[index] == "then":
+                qr = select_qreg_by_name(qc, rule[index - 2])
+                negation_0(qc, qr, rule[index - 1])
+                for i in range(select_qreg_by_name(qc, rule[index - 2]).size):
+                    if len(rule[index - 1]) > i:
+                        controls.append(select_qreg_by_name(qc, rule[index - 2])[i])
+                    else:
+                        break
+            if rule[index] == "then":
+                targs.append(
+                    select_qreg_by_name(qc, output_partition)[int(rule[index + 2][::-1], 2)]
+                )
+    if encoding == 'linear':
+        for index in range(len(rule)):
+            if rule[index] == "and" or rule[index] == "then":
+                qr = select_qreg_by_name(qc, rule[index - 2])
+                controls.append(select_qreg_by_name(qc, rule[index - 2])[rule[index-1][::-1].index('1')])
+            if rule[index] == "then":
+                targs.append(
+                    select_qreg_by_name(qc, output_partition)[int(rule[index + 2][::-1], 2)]
+                )
+
 
     qc.mcx(controls, targs[0])
     for index in range(len(rule)):
         if rule[index] == "and" or rule[index] == "then":
             qr = select_qreg_by_name(qc, rule[index - 2])
-            negation_0(qc, qr, rule[index - 1])
+            if encoding == 'logaritmic': negation_0(qc, qr, rule[index - 1])
 
 
 

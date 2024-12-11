@@ -8,16 +8,18 @@ from qiskit import (
 )
 from qiskit_aer import AerSimulator
 from qiskit.visualization import plot_histogram
+from qiskit.quantum_info import Statevector
 from qiskit import transpile
 from itertools import cycle, islice, repeat
 from concurrent.futures import ThreadPoolExecutor
 import time
 
 
-from . import fuzzy_partitions as fp
-from . import QFS as QFS
-#import fuzzy_partitions as fp
-#import QFS as QFS
+#from . import fuzzy_partitions as fp
+#from . import QFS as QFS
+import fuzzy_partitions as fp
+import QFS as QFS
+
 
 class QuantumFuzzyEngine:
     """
@@ -30,7 +32,7 @@ class QuantumFuzzyEngine:
 
     """
 
-    def __init__(self, verbose=True):
+    def __init__(self, verbose=True, encoding='logaritmic'):
         self.input_ranges = {}
         self.output_range = {}
         self.input_fuzzysets = {}
@@ -42,6 +44,7 @@ class QuantumFuzzyEngine:
         self.rule_subsets = {}
         self.qc = {}
         self.verbose = verbose
+        self.encoding = encoding
 
     def input_variable(self, name, range):
         """Define the input variable "name" of the system.
@@ -87,7 +90,7 @@ class QuantumFuzzyEngine:
         """
         for set in sets:
             self.input_fuzzysets[var_name].append(set)
-        self.input_partitions[var_name] = fp.fuzzy_partition(var_name, set_names)
+        self.input_partitions[var_name] = fp.fuzzy_partition(var_name, set_names, encoding=self.encoding)
 
     def add_output_fuzzysets(self, var_name, set_names, sets):
         """Set the partition for the output fuzzy variable 'var_name'.
@@ -215,7 +218,7 @@ class QuantumFuzzyEngine:
         # Not Distributed QFIE
         if not distributed:
             self.qc["full_circuit"] = QFS.generate_circuit(
-                list(self.input_partitions.values())
+                list(self.input_partitions.values()), encoding = self.encoding
             )
             self.qc["full_circuit"] = QFS.output_register(
                 self.qc["full_circuit"], list(self.output_partition.values())[0]
@@ -228,7 +231,7 @@ class QuantumFuzzyEngine:
             for label in qc_labels:
                 # Create a quantum circuit corresponding to each label
                 self.qc[label] = QFS.generate_circuit(
-                    list(self.input_partitions.values())
+                    list(self.input_partitions.values(), encoding = self.encoding)
                 )
                 self.qc[label] = QFS.output_single_qubit_register(self.qc[label], label)
                 # Create a subset of rules corresponding to each label
@@ -237,20 +240,48 @@ class QuantumFuzzyEngine:
         # COMPUTING AMPLITUDES FROM FUZZIFIED VALUES
         initial_state = {}
         for var_name in list(input_values.keys()):
-            initial_state[var_name] = [
-                math.sqrt(fuzzyfied_values[var_name][i])
-                for i in range(len(fuzzyfied_values[var_name]))
-            ]
-            required_len = QFS.select_qreg_by_name(
-                list(self.qc.values())[0], var_name
-            ).size
-            while len(initial_state[var_name]) != 2**required_len:
-                initial_state[var_name].append(0)
-            initial_state[var_name][-1] = math.sqrt(1 - sum(fuzzyfied_values[var_name]))
-            for circ in list(self.qc.values()):
-                circ.initialize(
-                    initial_state[var_name], QFS.select_qreg_by_name(circ, var_name)
-                )
+            if self.encoding == 'logaritmic':
+                initial_state[var_name] = [
+                    math.sqrt(fuzzyfied_values[var_name][i])
+                    for i in range(len(fuzzyfied_values[var_name]))
+                ]
+                required_len = QFS.select_qreg_by_name(
+                    list(self.qc.values())[0], var_name
+                ).size
+                while len(initial_state[var_name]) != 2**required_len:
+                    initial_state[var_name].append(0)
+                initial_state[var_name][-1] = math.sqrt(1 - sum(fuzzyfied_values[var_name]))
+                for circ in list(self.qc.values()):
+                    circ.initialize(
+                        initial_state[var_name], QFS.select_qreg_by_name(circ, var_name)
+                    )
+
+            if self.encoding == 'linear':
+
+                def linear_encoding(fuzzified_values):
+                    #print(sum(fuzzified_values).__round__(6))
+                    input_list = [math.sqrt(i) for i in fuzzified_values]
+                    n = len(input_list)  # Number of input elements
+                    output_size = 2 ** n  # Size of the output list
+                    output_list = [0] * output_size  # Initialize the output list with zeros
+
+                    for i in range(n):
+                        # Find the index that corresponds to the binary string with only the i-th bit set to 1
+                        index = 1 << i  # This is equivalent to 2**i
+                        output_list[index] = input_list[i]  # Substitute the value from the input list
+                    
+                    return output_list
+                
+                initial_state[var_name] = linear_encoding(fuzzyfied_values[var_name])
+                initial_state[var_name][0] = math.sqrt(1 - sum(fuzzyfied_values[var_name]))
+                for circ in list(self.qc.values()):
+                    circ.initialize(
+                        initial_state[var_name], QFS.select_qreg_by_name(circ, var_name)
+                    )
+                    #print(Statevector(circ).probabilities_dict())
+                #print(self.qc['full_circuit'])
+                #print('stop')
+
 
         # BUILDING ORACLES
         if not distributed:
@@ -260,6 +291,7 @@ class QuantumFuzzyEngine:
                     fuzzy_rule=rule,
                     partitions=list(self.input_partitions.values()),
                     output_partition=list(self.output_partition.values())[0],
+                    encoding=self.encoding
                 )
                 self.qc["full_circuit"].barrier()
 
@@ -294,6 +326,7 @@ class QuantumFuzzyEngine:
                         fuzzy_rule=rule,
                         partitions=list(self.input_partitions.values()),
                         output_partition=modified_output_partition,
+                        encoding=self.encoding
                     )
                     self.qc[label].barrier()
                 self.out_register_name.append(
@@ -448,3 +481,46 @@ class QuantumFuzzyEngine:
             ),
             activation_values,
         )
+
+
+
+env_light = np.linspace(120, 220, 200)
+changing_rate = np.linspace(-10, 10, 200)
+dimmer_control = np.linspace(0, 10, 200)
+
+
+
+l_dark = fuzz.trapmf(env_light, [120,120,130,150])
+l_medium = fuzz.trapmf(env_light, [130,  150, 190,210])
+l_light = fuzz.trapmf(env_light, [190,  210, 220, 220])
+
+r_ns = fuzz.trimf(changing_rate, [-10,-10,0])
+r_zero = fuzz.trimf(changing_rate, [-10,0,10])
+r_ps = fuzz.trimf(changing_rate, [0,10,10])
+
+dm_vs = fuzz.trapmf(dimmer_control, [0,0,2,4])
+dm_s = fuzz.trimf(dimmer_control, [2,4,6])
+dm_b = fuzz.trimf(dimmer_control, [4,6,8])
+dm_vb = fuzz.trapmf(dimmer_control, [6,8,10,10])
+
+rules = ['if env_light is dark and change_rate is pos_small then dimmer_ctrl is big',
+         'if env_light is dark and change_rate is zero then dimmer_ctrl is big',
+         'if env_light is dark and change_rate is neg_small then dimmer_ctrl is very_big',
+         'if env_light is medium and change_rate is pos_small then dimmer_ctrl is small',
+         'if env_light is medium and change_rate is zero then dimmer_ctrl is big',
+         'if env_light is medium and change_rate is neg_small then dimmer_ctrl is big',
+         'if env_light is light and change_rate is pos_small then dimmer_ctrl is very_small',
+         'if env_light is light and change_rate is zero then dimmer_ctrl is small',
+         'if env_light is light and change_rate is neg_small then dimmer_ctrl is big']
+
+qfie = QuantumFuzzyEngine(verbose=False, encoding='linear')
+qfie.input_variable(name='env_light', range=env_light)
+qfie.input_variable(name='change_rate', range=changing_rate)
+qfie.output_variable(name='dimmer_ctrl', range=dimmer_control)
+
+qfie.add_input_fuzzysets(var_name='env_light', set_names=['dark', 'medium', 'light'], sets=[l_dark, l_medium, l_light])
+qfie.add_input_fuzzysets(var_name='change_rate', set_names=['neg_small', 'zero', 'pos_small'], sets=[r_ns, r_zero, r_ps])
+qfie.add_output_fuzzysets(var_name='dimmer_ctrl', set_names=['very_small', 'small', 'big', 'very_big'],sets=[dm_vs, dm_s, dm_b, dm_vb])
+qfie.set_rules(rules)
+qfie.build_inference_qc({'env_light':170, 'change_rate':0}, encoding='linear', draw_qc=False)
+print('end')

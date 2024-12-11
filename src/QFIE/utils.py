@@ -1,5 +1,6 @@
 from itertools import groupby
 import re
+import math
 import numpy as np
 import skfuzzy as fuzz
 import matplotlib.pyplot as plt
