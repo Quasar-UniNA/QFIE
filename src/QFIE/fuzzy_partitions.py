@@ -6,6 +6,7 @@ class fuzzy_partition:
         self.name = name
         self.sets = sets
         self.encoding =  encoding
+       
 
     def len_partition(self):
         return len(self.sets)
@@ -40,9 +41,16 @@ class fuzzy_rules:
         for word in split:
             for partition in partitions:
                 if word == partition.name:
-                    converted_rule[
-                        split.index(word) + 1
-                    ] = partition.associate_quantum_states()[
-                        split[split.index(word) + 1]
-                    ]
+                    if split[split.index(word) + 1] !='not':
+                        converted_rule[
+                            split.index(word) + 1
+                        ] = partition.associate_quantum_states()[
+                            split[split.index(word) + 1]
+                        ]
+                    else: 
+                        converted_rule[
+                            split.index(word) + 2
+                        ] = partition.associate_quantum_states()[
+                            split[split.index(word) + 2]
+                        ]
         return converted_rule

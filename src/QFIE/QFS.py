@@ -107,6 +107,8 @@ def convert_rule(qc, fuzzy_rule, partitions, output_partition, encoding='logarit
     controls = []
     targs = []
     if encoding == 'logaritmic':
+        if "not" in rule: 
+            raise Exception("Fuzzy Negation only managed with the linear encoding")
         for index in range(len(rule)):
             if rule[index] == "and" or rule[index] == "then":
                 qr = select_qreg_by_name(qc, rule[index - 2])
@@ -120,22 +122,33 @@ def convert_rule(qc, fuzzy_rule, partitions, output_partition, encoding='logarit
                 targs.append(
                     select_qreg_by_name(qc, output_partition)[int(rule[index + 2][::-1], 2)]
                 )
-    if encoding == 'linear':
+        qc.mcx(controls, targs[0])
         for index in range(len(rule)):
             if rule[index] == "and" or rule[index] == "then":
                 qr = select_qreg_by_name(qc, rule[index - 2])
-                controls.append(select_qreg_by_name(qc, rule[index - 2])[rule[index-1][::-1].index('1')])
+                negation_0(qc, qr, rule[index - 1])
+
+
+
+    if encoding == 'linear':
+        for index in range(len(rule)):
+            if rule[index] == "and" or rule[index] == "then":
+                if rule[index - 2] != 'not':
+                    controls.append(select_qreg_by_name(qc, rule[index - 2])[rule[index-1][::-1].index('1')])
+                    to_negate = False
+                else: 
+                    to_negate = select_qreg_by_name(qc, rule[index - 3])[rule[index-1][::-1].index('1')]
+                    qc.x(select_qreg_by_name(qc, rule[index - 3])[rule[index-1][::-1].index('1')])
+                    controls.append(select_qreg_by_name(qc, rule[index - 3])[rule[index-1][::-1].index('1')])
             if rule[index] == "then":
                 targs.append(
                     select_qreg_by_name(qc, output_partition)[int(rule[index + 2][::-1], 2)]
                 )
+        qc.mcx(controls, targs[0])
+        if to_negate != False: qc.x(to_negate) 
 
-
-    qc.mcx(controls, targs[0])
-    for index in range(len(rule)):
-        if rule[index] == "and" or rule[index] == "then":
-            qr = select_qreg_by_name(qc, rule[index - 2])
-            if encoding == 'logaritmic': negation_0(qc, qr, rule[index - 1])
+    
+    
 
 
 
@@ -164,7 +177,6 @@ def compute_qc(backend, qc,  qc_label, n_shots, verbose=True,  transpilation_inf
         
 
     pm = generate_preset_pass_manager(backend=backend, optimization_level=optimization_level)
-    print('debug', str(optimization_level))
     transpiled_qc = pm.run(qc)
     if transpilation_info:
         print(
@@ -174,7 +186,7 @@ def compute_qc(backend, qc,  qc_label, n_shots, verbose=True,  transpilation_inf
             "Operations " + str(qc_label),
             transpiled_qc.count_ops(),
         )
-
+    print(transpiled_qc)
     sampler = SamplerV2(backend)
     job = sampler.run([transpiled_qc], shots=n_shots)
     job_result = job.result()

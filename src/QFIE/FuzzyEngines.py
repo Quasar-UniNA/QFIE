@@ -116,7 +116,9 @@ class QuantumFuzzyEngine:
         Returns:
             None
         """
+         
         self.rules = rules
+
 
     def filter_rules(self, rules, output_term):
         """Searches the rule list and picks only the rules corresponding to the same output value (y_k at fixed k). \n
@@ -231,7 +233,7 @@ class QuantumFuzzyEngine:
             for label in qc_labels:
                 # Create a quantum circuit corresponding to each label
                 self.qc[label] = QFS.generate_circuit(
-                    list(self.input_partitions.values(), encoding = self.encoding)
+                    list(self.input_partitions.values()), encoding = self.encoding
                 )
                 self.qc[label] = QFS.output_single_qubit_register(self.qc[label], label)
                 # Create a subset of rules corresponding to each label
@@ -483,7 +485,7 @@ class QuantumFuzzyEngine:
         )
 
 
-
+"""
 env_light = np.linspace(120, 220, 200)
 changing_rate = np.linspace(-10, 10, 200)
 dimmer_control = np.linspace(0, 10, 200)
@@ -503,12 +505,20 @@ dm_s = fuzz.trimf(dimmer_control, [2,4,6])
 dm_b = fuzz.trimf(dimmer_control, [4,6,8])
 dm_vb = fuzz.trapmf(dimmer_control, [6,8,10,10])
 
-rules = ['if env_light is dark and change_rate is pos_small then dimmer_ctrl is big',
+'''rules = ['if env_light is dark and change_rate is pos_small then dimmer_ctrl is big',
          'if env_light is dark and change_rate is zero then dimmer_ctrl is big',
          'if env_light is dark and change_rate is neg_small then dimmer_ctrl is very_big',
          'if env_light is medium and change_rate is pos_small then dimmer_ctrl is small',
          'if env_light is medium and change_rate is zero then dimmer_ctrl is big',
          'if env_light is medium and change_rate is neg_small then dimmer_ctrl is big',
+         'if env_light is light and change_rate is pos_small then dimmer_ctrl is very_small',
+         'if env_light is light and change_rate is zero then dimmer_ctrl is small',
+         'if env_light is light and change_rate is neg_small then dimmer_ctrl is big']'''
+
+rules = ['if env_light is dark and change_rate is not neg_small then dimmer_ctrl is big', 
+         'if env_light is dark and change_rate is neg_small then dimmer_ctrl is very_big',
+         'if env_light is medium and change_rate is not pos_small then dimmer_ctrl is big',
+         'if env_light is medium and change_rate is pos_small then dimmer_ctrl is small',
          'if env_light is light and change_rate is pos_small then dimmer_ctrl is very_small',
          'if env_light is light and change_rate is zero then dimmer_ctrl is small',
          'if env_light is light and change_rate is neg_small then dimmer_ctrl is big']
@@ -522,5 +532,7 @@ qfie.add_input_fuzzysets(var_name='env_light', set_names=['dark', 'medium', 'lig
 qfie.add_input_fuzzysets(var_name='change_rate', set_names=['neg_small', 'zero', 'pos_small'], sets=[r_ns, r_zero, r_ps])
 qfie.add_output_fuzzysets(var_name='dimmer_ctrl', set_names=['very_small', 'small', 'big', 'very_big'],sets=[dm_vs, dm_s, dm_b, dm_vb])
 qfie.set_rules(rules)
-qfie.build_inference_qc({'env_light':170, 'change_rate':0}, encoding='linear', draw_qc=False)
+qfie.build_inference_qc({'env_light':170, 'change_rate':0}, encoding='linear', draw_qc=False, distributed=True)
+print(qfie.qc['very_big'])
 print('end')
+"""
