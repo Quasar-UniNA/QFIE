@@ -15,10 +15,10 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 
 
-#from . import fuzzy_partitions as fp
-#from . import QFS as QFS
-import fuzzy_partitions as fp
-import QFS as QFS
+from . import fuzzy_partitions as fp
+from . import QFS as QFS
+#import fuzzy_partitions as fp
+#import QFS as QFS
 
 
 class QuantumFuzzyEngine:

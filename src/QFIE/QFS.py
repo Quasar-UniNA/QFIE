@@ -6,8 +6,8 @@ from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 
 import math
-#from . import fuzzy_partitions as fp
-import fuzzy_partitions as fp
+from . import fuzzy_partitions as fp
+#import fuzzy_partitions as fp
 
 Qregisters = []
 
