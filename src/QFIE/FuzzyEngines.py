@@ -182,6 +182,19 @@ class QuantumFuzzyEngine:
 
         return output
 
+    def fuzzyfication(self, input_values):
+        fuzzyfied_values = {}
+        for var_name in list(input_values.keys()):
+            fuzzyfied_values[var_name] = [
+                fuzz.interp_membership(
+                    self.input_ranges[var_name], i, input_values[var_name]
+                )
+                for i in self.input_fuzzysets[var_name]
+            ]
+        if self.verbose:
+            print("Input values ", fuzzyfied_values)
+        return fuzzyfied_values
+
     def build_inference_qc(
         self, input_values, distributed=False, draw_qc=False, **kwargs
     ):
@@ -205,17 +218,9 @@ class QuantumFuzzyEngine:
             print(input_values)
 
         # FUZZIFICATION
-        fuzzyfied_values = {}
-        for var_name in list(input_values.keys()):
-            fuzzyfied_values[var_name] = [
-                fuzz.interp_membership(
-                    self.input_ranges[var_name], i, input_values[var_name]
-                )
-                for i in self.input_fuzzysets[var_name]
-            ]
-        if self.verbose:
-            print("Input values ", fuzzyfied_values)
+        fuzzyfied_values = self.fuzzyfication(input_values=input_values)
 
+        
         # CIRCUIT SETUPS
         # Not Distributed QFIE
         if not distributed:
@@ -427,7 +432,7 @@ class QuantumFuzzyEngine:
         self.n_q = len(self.output_fuzzyset[list(self.output_fuzzyset.keys())[0]])
         counts = self.counts_evaluator(n_qubits=self.n_q, counts=self.counts_)
         normalized_counts = counts
-        output_dict = {
+        self.output_dict = {
             i: []
             for i in self.output_partition[
                 list(self.output_fuzzyset.keys())[0]
@@ -435,17 +440,17 @@ class QuantumFuzzyEngine:
         }
 
         counter = 0
-        for set in list(output_dict.keys()):
+        for set in list(self.output_dict.keys()):
             counter = counter + 1
             for i in range(self.n_q):
                 if i == self.n_q - counter:
-                    output_dict[set].append("1")
+                    self.output_dict[set].append("1")
                 else:
-                    output_dict[set].append("0")
-            output_dict[set] = "".join(output_dict[set])
+                    self.output_dict[set].append("0")
+            self.output_dict[set] = "".join(self.output_dict[set])
 
         memberships = {}
-        for state in list(output_dict.values()):
+        for state in list(self.output_dict.values()):
             if state in list(normalized_counts.keys()):
                 memberships[state] = normalized_counts[state]
             else:
@@ -457,17 +462,18 @@ class QuantumFuzzyEngine:
         else: defuzz = 'centroid'
 
         norm_memberships = memberships
+        self.alpha_cuts = {key: norm_memberships[value] for key, value in self.output_dict.items()}
+
         if self.verbose:
             print("Output Counts", memberships)
         activation = {}
         set_number = 0
-        for set in list(output_dict.keys()):
+        for set in list(self.output_dict.keys()):
             activation[set] = np.fmin(
-                norm_memberships[output_dict[set]],
+                norm_memberships[self.output_dict[set]],
                 self.output_fuzzyset[list(self.output_fuzzyset.keys())[0]][set_number],
             )
             set_number = set_number + 1
-
         activation_values = list(activation.values())[::-1]
         aggregated = np.zeros(
             self.output_fuzzyset[list(self.output_fuzzyset.keys())[0]][0].shape

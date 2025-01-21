@@ -186,7 +186,7 @@ def compute_qc(backend, qc,  qc_label, n_shots, verbose=True,  transpilation_inf
             "Operations " + str(qc_label),
             transpiled_qc.count_ops(),
         )
-    print(transpiled_qc)
+        print(transpiled_qc)
     sampler = SamplerV2(backend)
     job = sampler.run([transpiled_qc], shots=n_shots)
     job_result = job.result()
