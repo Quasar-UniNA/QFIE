@@ -2,7 +2,11 @@ from qiskit import (
     QuantumCircuit,
     QuantumRegister,
 )
-from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
+try:
+    from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
+except ImportError:
+    QiskitRuntimeService = None
+    SamplerV2 = None
 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
 
 import math
@@ -46,12 +50,17 @@ def generate_circuit(fuzzy_partitions, encoding='logaritmic'):
     return qc
 
 
-def output_register(qc, output_partition):
+def output_register(qc, output_partition, output_encoding='one-hot'):
+    if output_encoding == 'gray':
+        register_size = max(1, math.ceil(math.log(output_partition.len_partition(), 2)))
+    else:
+        register_size = output_partition.len_partition()
+
     qc.add_register(
-        QuantumRegister(output_partition.len_partition(), name=output_partition.name)
+        QuantumRegister(register_size, name=output_partition.name)
     )
     Qregisters.append(
-        QuantumRegister(output_partition.len_partition(), name=output_partition.name)
+        QuantumRegister(register_size, name=output_partition.name)
     )
     return qc
 
@@ -163,10 +172,16 @@ def compute_qc(backend, qc,  qc_label, n_shots, verbose=True,  transpilation_inf
           verbose (Bool): True to see detail of execution;
           transpilation_info (Bool): True to get information about transpiled qc.
             
-     Return:
+    Return:
          A dictionary with qc_label as key and counts as value.
             
           """
+    if SamplerV2 is None:
+        raise ImportError(
+            "qiskit_ibm_runtime is required to execute quantum circuits. "
+            "Install qiskit-ibm-runtime or pass an execution backend supported by this environment."
+        )
+
     if verbose:
         try:
             backend_name = backend.backend_name
@@ -186,7 +201,7 @@ def compute_qc(backend, qc,  qc_label, n_shots, verbose=True,  transpilation_inf
             "Operations " + str(qc_label),
             transpiled_qc.count_ops(),
         )
-    print(transpiled_qc)
+        print(transpiled_qc)
     sampler = SamplerV2(backend)
     job = sampler.run([transpiled_qc], shots=n_shots)
     job_result = job.result()
@@ -196,5 +211,3 @@ def compute_qc(backend, qc,  qc_label, n_shots, verbose=True,  transpilation_inf
 
 
     return {qc_label:counts}
-
-

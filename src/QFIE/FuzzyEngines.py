@@ -2,23 +2,517 @@
 import numpy as np
 import skfuzzy as fuzz
 import math
+import warnings
 from copy import deepcopy
+from pathlib import Path
 from qiskit import (
     ClassicalRegister,
+    QuantumRegister,
 )
-from qiskit_aer import AerSimulator
+try:
+    from qiskit_aer import AerSimulator
+except ImportError:
+    AerSimulator = None
 from qiskit.visualization import plot_histogram
 from qiskit.quantum_info import Statevector
 from qiskit import transpile
-from itertools import cycle, islice, repeat
+from itertools import cycle, islice, repeat, product as cartesian_product
 from concurrent.futures import ThreadPoolExecutor
 import time
+from sympy import false, symbols, true
+from sympy.logic.boolalg import And, Not, Or, SOPform
 
 
 from . import fuzzy_partitions as fp
 from . import QFS as QFS
 #import fuzzy_partitions as fp
 #import QFS as QFS
+
+
+def _prepare_draw_filename(filename, label=None):
+    path = Path(filename).expanduser()
+    if label is not None:
+        path = path.with_name(f"{label}_{path.name}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
+
+def _bitstring_to_minterm(bitstring):
+    return int(bitstring, 2) if bitstring else 0
+
+
+def _padded_code(code, qreg_size):
+    return code + ("0" * (qreg_size - len(code)))
+
+
+def _partition_valid_codes(partition, qreg_size):
+    return [
+        _padded_code(code, qreg_size)
+        for code in partition.associate_quantum_states().values()
+    ]
+
+
+def _all_bitstrings(n_bits):
+    return [
+        "".join(bits)
+        for bits in cartesian_product("01", repeat=n_bits)
+    ]
+
+
+def _gray_code(index):
+    return index ^ (index >> 1)
+
+
+def _output_register_size(output_partition, output_encoding):
+    if output_encoding == "gray":
+        return max(1, math.ceil(math.log(output_partition.len_partition(), 2)))
+    return output_partition.len_partition()
+
+
+def _output_code_for_index(output_index, output_partition, output_encoding):
+    if output_encoding == "gray":
+        register_size = _output_register_size(output_partition, output_encoding)
+        binary_format = "{0:0" + str(register_size) + "b}"
+        return binary_format.format(_gray_code(output_index))
+
+    bits = ["0" for _ in range(output_partition.len_partition())]
+    bits[output_index] = "1"
+    return "".join(bits)
+
+
+def _output_codes(output_partition, output_encoding):
+    return [
+        _output_code_for_index(output_index, output_partition, output_encoding)
+        for output_index in range(output_partition.len_partition())
+    ]
+
+
+def _collect_valid_and_invalid_input_codes(partitions, qreg_sizes):
+    local_valid_codes = [
+        _partition_valid_codes(partition, qreg_sizes[partition.name])
+        for partition in partitions
+    ]
+    local_all_codes = [
+        _all_bitstrings(qreg_sizes[partition.name])
+        for partition in partitions
+    ]
+
+    valid_inputs = {
+        "".join(codes)
+        for codes in cartesian_product(*local_valid_codes)
+    }
+    all_inputs = {
+        "".join(codes)
+        for codes in cartesian_product(*local_all_codes)
+    }
+    invalid_inputs = all_inputs - valid_inputs
+    return sorted(valid_inputs), sorted(invalid_inputs), sorted(all_inputs)
+
+
+def _rule_product_and_output_index(rule, input_partitions, output_partition, encoding):
+    all_partitions = input_partitions.copy()
+    all_partitions.append(output_partition)
+    converted_rule = fp.fuzzy_rules().add_rules(rule, all_partitions)
+    original_rule = list(filter(("is").__ne__, rule.split()))
+
+    product = []
+    output_index = None
+
+    for index, token in enumerate(converted_rule):
+        if token != "and" and token != "then":
+            continue
+
+        if encoding == "linear" and converted_rule[index - 2] == "not":
+            var_name = converted_rule[index - 3]
+            code = converted_rule[index - 1]
+            qubit_index = code[::-1].index("1")
+            product.append((f"{var_name}_{qubit_index}", 0))
+        else:
+            var_name = converted_rule[index - 2]
+            code = converted_rule[index - 1]
+            if encoding == "linear":
+                qubit_index = code[::-1].index("1")
+                product.append((f"{var_name}_{qubit_index}", 1))
+            else:
+                for qubit_index, bit_value in enumerate(code):
+                    product.append((f"{var_name}_{qubit_index}", int(bit_value)))
+
+        if token == "then":
+            output_index = output_partition.sets.index(original_rule[index + 2])
+
+    return product, output_index
+
+
+def _product_matches(product, assignment):
+    return all(assignment[var_name] == bit_value for var_name, bit_value in product)
+
+
+def _build_rule_truth_table(
+    rules,
+    input_partitions,
+    output_partition,
+    output_encoding,
+    encoding,
+    valid_inputs,
+    invalid_inputs,
+    variable_order,
+):
+    parsed_rules = [
+        _rule_product_and_output_index(rule, input_partitions, output_partition, encoding)
+        for rule in rules
+    ]
+    output_codes = _output_codes(output_partition, output_encoding)
+    n_output_bits = len(output_codes[0])
+    ones_by_output = [[] for _ in range(n_output_bits)]
+    dontcares_by_output = [
+        [_bitstring_to_minterm(bitstring) for bitstring in invalid_inputs]
+        for _ in range(n_output_bits)
+    ]
+
+    for bitstring in valid_inputs:
+        assignment = {
+            variable_order[i]: int(bitstring[i])
+            for i in range(len(variable_order))
+        }
+        matched_outputs = set()
+        for product, output_index in parsed_rules:
+            if _product_matches(product, assignment):
+                matched_outputs.add(output_index)
+
+        for output_index in matched_outputs:
+            output_code = output_codes[output_index]
+            for bit_index, bit_value in enumerate(output_code):
+                if bit_value == "1":
+                    ones_by_output[bit_index].append(_bitstring_to_minterm(bitstring))
+
+    return ones_by_output, dontcares_by_output, parsed_rules
+
+
+def _minimize_output_bit_sop(variables, ones, dontcares):
+    return SOPform(variables, ones, dontcares)
+
+
+def _sympy_expr_to_products(expr):
+    if expr == false:
+        return []
+    if expr == true:
+        return [[]]
+
+    terms = expr.args if isinstance(expr, Or) else (expr,)
+    products = []
+    for term in terms:
+        factors = term.args if isinstance(term, And) else (term,)
+        product = []
+        for factor in factors:
+            if isinstance(factor, Not):
+                product.append((str(factor.args[0]), 0))
+            else:
+                product.append((str(factor), 1))
+        products.append(product)
+    return products
+
+
+def _product_to_string(product):
+    if len(product) == 0:
+        return "1"
+    return " & ".join(
+        var_name if bit_value == 1 else f"~{var_name}"
+        for var_name, bit_value in product
+    )
+
+
+def _products_to_sop_string(products):
+    if len(products) == 0:
+        return "0"
+    terms = []
+    for product in products:
+        term = _product_to_string(product)
+        if len(product) > 1:
+            term = f"({term})"
+        terms.append(term)
+    return " | ".join(terms)
+
+
+def _original_products_by_output(parsed_rules, output_partition, output_encoding):
+    output_codes = _output_codes(output_partition, output_encoding)
+    products_by_output = [[] for _ in range(len(output_codes[0]))]
+    for product, output_index in parsed_rules:
+        for bit_index, bit_value in enumerate(output_codes[output_index]):
+            if bit_value == "1":
+                products_by_output[bit_index].append(product)
+    return products_by_output
+
+
+def _print_fuzzy_set_basis_mapping(input_partitions, output_partition, output_encoding):
+    print("Fuzzy-set basis-state mapping")
+    print("  Input registers use bitstrings in register order q[0]..q[n-1].")
+    for partition in input_partitions:
+        print(f"  Input {partition.name}:")
+        for set_name, bitstring in partition.associate_quantum_states().items():
+            qubit_values = ", ".join(
+                f"{partition.name}_{index}={bit_value}"
+                for index, bit_value in enumerate(bitstring)
+            )
+            print(f"    {set_name}: |{bitstring}> ({qubit_values})")
+
+    if output_encoding == "gray":
+        print(f"  Output {output_partition.name} uses Gray-encoded register bits q[0]..q[n-1]:")
+    else:
+        print(f"  Output {output_partition.name} uses one-hot register bits q[0]..q[n-1]:")
+
+    for output_index, set_name in enumerate(output_partition.sets):
+        bitstring = _output_code_for_index(
+            output_index,
+            output_partition,
+            output_encoding,
+        )
+        print(
+            f"    {set_name}: |{bitstring}> "
+            f"({', '.join(f'{output_partition.name}_{i}={bit}' for i, bit in enumerate(bitstring))})"
+        )
+
+
+def _print_boolean_optimization_report(
+    input_partitions,
+    output_partition,
+    output_encoding,
+    optimization_data,
+    output_indices=None,
+    ancilla=False,
+):
+    if output_indices is None:
+        output_indices = range(len(optimization_data["products_by_output"]))
+
+    original_products = _original_products_by_output(
+        optimization_data["parsed_rules"],
+        output_partition,
+        output_encoding,
+    )
+
+    _print_fuzzy_set_basis_mapping(input_partitions, output_partition, output_encoding)
+    print("Boolean minimization report")
+    for output_index in output_indices:
+        if output_encoding == "gray":
+            output_label = f"{output_partition.name}_bit_{output_index}"
+        else:
+            output_label = output_partition.sets[output_index]
+        optimized_products = optimization_data["products_by_output"][output_index]
+        products_are_disjoint = _products_are_disjoint_on_valid_inputs(
+            optimized_products,
+            optimization_data["valid_inputs"],
+            optimization_data["variable_order"],
+        )
+        if products_are_disjoint:
+            synthesis = "optimized SOP synthesized directly with MCX gates"
+        elif ancilla:
+            synthesis = "optimized SOP synthesized as OR-of-products with ancillas"
+        else:
+            synthesis = "optimized SOP products overlap; rule-by-rule fallback is used"
+
+        print(f"Output {output_partition.name}[{output_index}] ({output_label})")
+        print(f"  Original SOP:  {_products_to_sop_string(original_products[output_index])}")
+        print(f"  Optimized SOP: {_products_to_sop_string(optimized_products)}")
+        print(f"  Synthesis:     {synthesis}")
+
+
+def _apply_product_as_mcx(qc, product, target, var_to_qubit):
+    if len(product) == 0:
+        qc.x(target)
+        return
+
+    controls = [var_to_qubit[var_name] for var_name, _ in product]
+    negative_controls = [
+        var_to_qubit[var_name]
+        for var_name, bit_value in product
+        if bit_value == 0
+    ]
+
+    for qubit in negative_controls:
+        qc.x(qubit)
+
+    if len(controls) == 1:
+        qc.cx(controls[0], target)
+    elif len(controls) == 2:
+        qc.ccx(controls[0], controls[1], target)
+    else:
+        qc.mcx(controls, target)
+
+    for qubit in reversed(negative_controls):
+        qc.x(qubit)
+
+
+def _apply_product_to_ancilla(qc, product, ancilla, var_to_qubit):
+    _apply_product_as_mcx(qc, product, ancilla, var_to_qubit)
+
+
+def _products_are_disjoint_on_valid_inputs(products, valid_inputs, variable_order):
+    for bitstring in valid_inputs:
+        assignment = {
+            variable_order[i]: int(bitstring[i])
+            for i in range(len(variable_order))
+        }
+
+        active_count = 0
+        for product in products:
+            if _product_matches(product, assignment):
+                active_count += 1
+
+        if active_count > 1:
+            return False
+
+    return True
+
+
+def _apply_or_many_to_target(qc, term_qubits, target):
+    if len(term_qubits) == 0:
+        return
+
+    if len(term_qubits) == 1:
+        qc.cx(term_qubits[0], target)
+        return
+
+    for qubit in term_qubits:
+        qc.x(qubit)
+
+    if len(term_qubits) == 2:
+        qc.ccx(term_qubits[0], term_qubits[1], target)
+    else:
+        qc.mcx(term_qubits, target)
+
+    qc.x(target)
+
+    for qubit in reversed(term_qubits):
+        qc.x(qubit)
+
+
+def _synthesize_sop_to_target_with_ancillas(
+    qc,
+    products,
+    target,
+    var_to_qubit,
+    term_ancillas,
+):
+    if len(products) == 0:
+        return
+
+    if len(products) == 1:
+        _apply_product_as_mcx(qc, products[0], target, var_to_qubit)
+        return
+
+    if len(term_ancillas) < len(products):
+        raise ValueError("Not enough ancillas for SOP synthesis.")
+
+    used_ancillas = term_ancillas[:len(products)]
+
+    for product, anc in zip(products, used_ancillas):
+        _apply_product_to_ancilla(qc, product, anc, var_to_qubit)
+
+    _apply_or_many_to_target(qc, used_ancillas, target)
+
+    for product, anc in reversed(list(zip(products, used_ancillas))):
+        _apply_product_to_ancilla(qc, product, anc, var_to_qubit)
+
+
+def _build_optimization_data(qc, rules, input_partitions, output_partition, output_encoding, encoding):
+    qreg_sizes = {
+        partition.name: QFS.select_qreg_by_name(qc, partition.name).size
+        for partition in input_partitions
+    }
+    variable_order = []
+    var_to_qubit = {}
+    for partition in input_partitions:
+        qreg = QFS.select_qreg_by_name(qc, partition.name)
+        for qubit_index in range(qreg.size):
+            var_name = f"{partition.name}_{qubit_index}"
+            variable_order.append(var_name)
+            var_to_qubit[var_name] = qreg[qubit_index]
+
+    valid_inputs, invalid_inputs, _ = _collect_valid_and_invalid_input_codes(
+        input_partitions,
+        qreg_sizes,
+    )
+    ones_by_output, dontcares_by_output, parsed_rules = _build_rule_truth_table(
+        rules,
+        input_partitions,
+        output_partition,
+        output_encoding,
+        encoding,
+        valid_inputs,
+        invalid_inputs,
+        variable_order,
+    )
+    sympy_variables = symbols(" ".join(variable_order))
+    if len(variable_order) == 1:
+        sympy_variables = (sympy_variables,)
+    products_by_output = [
+        _sympy_expr_to_products(
+            _minimize_output_bit_sop(sympy_variables, ones, dontcares)
+        )
+        for ones, dontcares in zip(ones_by_output, dontcares_by_output)
+    ]
+
+    return {
+        "products_by_output": products_by_output,
+        "parsed_rules": parsed_rules,
+        "valid_inputs": valid_inputs,
+        "variable_order": variable_order,
+        "var_to_qubit": var_to_qubit,
+    }
+
+
+def _rules_for_output_index(parsed_rules, rules, output_index):
+    return [
+        rule
+        for rule, (_, rule_output_index) in zip(rules, parsed_rules)
+        if rule_output_index == output_index
+    ]
+
+
+def _rules_for_output_bit(parsed_rules, rules, output_bit_index, output_partition, output_encoding):
+    return [
+        rule
+        for rule, (_, rule_output_index) in zip(rules, parsed_rules)
+        if _output_code_for_index(rule_output_index, output_partition, output_encoding)[output_bit_index] == "1"
+    ]
+
+
+def _apply_rule_with_encoded_output(
+    qc,
+    rule,
+    input_partitions,
+    output_partition,
+    output_encoding,
+    encoding,
+    var_to_qubit,
+    output_qreg,
+):
+    product, output_index = _rule_product_and_output_index(
+        rule,
+        input_partitions,
+        output_partition,
+        encoding,
+    )
+    output_code = _output_code_for_index(output_index, output_partition, output_encoding)
+    applied_gate = False
+    for output_bit_index, bit_value in enumerate(output_code):
+        if bit_value == "1":
+            _apply_product_as_mcx(
+                qc,
+                product,
+                output_qreg[output_bit_index],
+                var_to_qubit,
+            )
+            applied_gate = True
+    return applied_gate
+
+
+def _var_to_qubit_for_inputs(qc, input_partitions):
+    var_to_qubit = {}
+    for partition in input_partitions:
+        qreg = QFS.select_qreg_by_name(qc, partition.name)
+        for qubit_index in range(qreg.size):
+            var_to_qubit[f"{partition.name}_{qubit_index}"] = qreg[qubit_index]
+    return var_to_qubit
 
 
 class QuantumFuzzyEngine:
@@ -44,6 +538,7 @@ class QuantumFuzzyEngine:
         self.rule_subsets = {}
         self.qc = {}
         self.verbose = verbose
+        self.transpile_info = verbose
         self.encoding = encoding
 
     def input_variable(self, name, range):
@@ -90,7 +585,12 @@ class QuantumFuzzyEngine:
         """
         for set in sets:
             self.input_fuzzysets[var_name].append(set)
-        self.input_partitions[var_name] = fp.fuzzy_partition(var_name, set_names, encoding=self.encoding)
+        self.input_partitions[var_name] = fp.fuzzy_partition(
+            var_name,
+            set_names,
+            encoding=self.encoding,
+            minimize_hamming=self.encoding == 'logaritmic',
+        )
 
     def add_output_fuzzysets(self, var_name, set_names, sets):
         """Set the partition for the output fuzzy variable 'var_name'.
@@ -183,7 +683,15 @@ class QuantumFuzzyEngine:
         return output
 
     def build_inference_qc(
-        self, input_values, distributed=False, draw_qc=False, **kwargs
+        self,
+        input_values,
+        distributed=False,
+        draw_qc=False,
+        optimize=False,
+        ancilla=False,
+        verbose=False,
+        output_encoding="one-hot",
+        **kwargs
     ):
         """This function builds the quantum circuit implementing the QFIE, initializing the input quantum registers
         according to the 'input_value' argument.
@@ -193,12 +701,35 @@ class QuantumFuzzyEngine:
                 E.g. {'var_name_1' (str): x_1 (float), , 'var_name_n' (str): x_n (float)}
              draw_qc (Bool - default:False): True for drawing the quantum circuit built. False otherwise.
              distributed (Boolean): True to implement the distributed version of the quantum oracle. False otherwise.
+             optimize (Boolean): True to minimize the Boolean function induced by the fuzzy rule base before
+                synthesizing each one-hot output bit. Invalid unused encodings are treated as don't-cares, while
+                valid inputs not covered by any rule preserve the current no-flip default behavior. Optimized
+                circuits preserve the original oracle behavior on valid input encodings.
+             ancilla (Boolean): Only used when optimize=True. True allows overlapping minimized SOP products
+                to be synthesized as a true OR-of-products network with temporary ancillas, which are uncomputed
+                to |0>. Disjoint products are still synthesized directly with MCX gates. With optimize=True and
+                ancilla=False, overlapping products fall back to the original rule-by-rule construction and emit
+                a RuntimeWarning.
+             verbose (Boolean): Only used when optimize=True. True prints, for each output bit, the original
+                SOP induced by the rules, the minimized SOP, and the synthesis strategy selected.
+             output_encoding (str): 'one-hot' keeps the legacy one-hot output register with one target qubit per
+                output fuzzy set. 'gray' uses a compressed Gray-encoded output register and builds one Boolean
+                function for each output-code bit.
             :keyword filename (str): file path to save image to.
         
         Returns:
             None
         """
+        if output_encoding not in ("one-hot", "gray"):
+            raise ValueError("output_encoding must be 'one-hot' or 'gray'.")
+        if distributed and output_encoding != "one-hot":
+            raise NotImplementedError(
+                "Distributed QFIE is supported only with output_encoding='one-hot'."
+            )
+
         self.distributed = distributed
+        self.output_encoding = output_encoding
+        self.transpile_info = verbose
 
         # Print Crisp Inputs
         if self.verbose:
@@ -223,7 +754,9 @@ class QuantumFuzzyEngine:
                 list(self.input_partitions.values()), encoding = self.encoding
             )
             self.qc["full_circuit"] = QFS.output_register(
-                self.qc["full_circuit"], list(self.output_partition.values())[0]
+                self.qc["full_circuit"],
+                list(self.output_partition.values())[0],
+                output_encoding=output_encoding,
             )
         # Distributed QFIE
         else:
@@ -243,16 +776,33 @@ class QuantumFuzzyEngine:
         initial_state = {}
         for var_name in list(input_values.keys()):
             if self.encoding == 'logaritmic':
-                initial_state[var_name] = [
-                    math.sqrt(fuzzyfied_values[var_name][i])
-                    for i in range(len(fuzzyfied_values[var_name]))
-                ]
                 required_len = QFS.select_qreg_by_name(
                     list(self.qc.values())[0], var_name
                 ).size
-                while len(initial_state[var_name]) != 2**required_len:
-                    initial_state[var_name].append(0)
-                initial_state[var_name][-1] = math.sqrt(1 - sum(fuzzyfied_values[var_name]))
+                initial_state[var_name] = [0 for _ in range(2**required_len)]
+                used_indexes = set()
+                quantum_states = self.input_partitions[var_name].associate_quantum_states()
+                set_names = self.input_partitions[var_name].sets
+                for set_index, set_name in enumerate(set_names):
+                    bitstring = _padded_code(
+                        quantum_states[set_name],
+                        required_len,
+                    )
+                    basis_index = int(bitstring[::-1], 2)
+                    used_indexes.add(basis_index)
+                    initial_state[var_name][basis_index] = math.sqrt(
+                        fuzzyfied_values[var_name][set_index]
+                    )
+
+                default_indexes = [
+                    index
+                    for index in range(2**required_len)
+                    if index not in used_indexes
+                ]
+                if default_indexes:
+                    initial_state[var_name][default_indexes[0]] = math.sqrt(
+                        1 - sum(fuzzyfied_values[var_name])
+                    )
                 for circ in list(self.qc.values()):
                     circ.initialize(
                         initial_state[var_name], QFS.select_qreg_by_name(circ, var_name)
@@ -287,29 +837,178 @@ class QuantumFuzzyEngine:
 
         # BUILDING ORACLES
         if not distributed:
-            for rule in self.rules:
-                QFS.convert_rule(
-                    qc=self.qc["full_circuit"],
-                    fuzzy_rule=rule,
-                    partitions=list(self.input_partitions.values()),
-                    output_partition=list(self.output_partition.values())[0],
-                    encoding=self.encoding
+            output_partition = list(self.output_partition.values())[0]
+            input_partitions = list(self.input_partitions.values())
+            if not optimize:
+                if output_encoding == "one-hot":
+                    for rule in self.rules:
+                        QFS.convert_rule(
+                            qc=self.qc["full_circuit"],
+                            fuzzy_rule=rule,
+                            partitions=input_partitions,
+                            output_partition=output_partition,
+                            encoding=self.encoding
+                        )
+                        self.qc["full_circuit"].barrier()
+                else:
+                    output_qreg = QFS.select_qreg_by_name(
+                        self.qc["full_circuit"],
+                        output_partition.name,
+                    )
+                    var_to_qubit = _var_to_qubit_for_inputs(
+                        self.qc["full_circuit"],
+                        input_partitions,
+                    )
+                    for rule in self.rules:
+                        applied_gate = _apply_rule_with_encoded_output(
+                            self.qc["full_circuit"],
+                            rule,
+                            input_partitions,
+                            output_partition,
+                            output_encoding,
+                            self.encoding,
+                            var_to_qubit,
+                            output_qreg,
+                        )
+                        if applied_gate:
+                            self.qc["full_circuit"].barrier()
+            else:
+                optimization_data = _build_optimization_data(
+                    self.qc["full_circuit"],
+                    self.rules,
+                    input_partitions,
+                    output_partition,
+                    output_encoding,
+                    self.encoding,
                 )
-                self.qc["full_circuit"].barrier()
+                if verbose:
+                    _print_boolean_optimization_report(
+                        input_partitions,
+                        output_partition,
+                        output_encoding,
+                        optimization_data,
+                        ancilla=ancilla,
+                    )
+                products_by_output = optimization_data["products_by_output"]
+                term_ancillas = []
+                if ancilla:
+                    max_products = max(
+                        [
+                            len(products)
+                            for products in products_by_output
+                            if not _products_are_disjoint_on_valid_inputs(
+                                products,
+                                optimization_data["valid_inputs"],
+                                optimization_data["variable_order"],
+                            )
+                        ],
+                        default=0,
+                    )
+                    if max_products > 1:
+                        anc = QuantumRegister(max_products, "anc")
+                        self.qc["full_circuit"].add_register(anc)
+                        term_ancillas = list(anc)
+
+                output_qreg = QFS.select_qreg_by_name(
+                    self.qc["full_circuit"],
+                    output_partition.name,
+                )
+                for output_index, products in enumerate(products_by_output):
+                    applied_gate = False
+                    added_barrier = False
+                    products_are_disjoint = _products_are_disjoint_on_valid_inputs(
+                        products,
+                        optimization_data["valid_inputs"],
+                        optimization_data["variable_order"],
+                    )
+                    if products_are_disjoint:
+                        for product in products:
+                            _apply_product_as_mcx(
+                                self.qc["full_circuit"],
+                                product,
+                                output_qreg[output_index],
+                                optimization_data["var_to_qubit"],
+                            )
+                            applied_gate = True
+                    elif ancilla:
+                        _synthesize_sop_to_target_with_ancillas(
+                            self.qc["full_circuit"],
+                            products,
+                            output_qreg[output_index],
+                            optimization_data["var_to_qubit"],
+                            term_ancillas,
+                        )
+                        applied_gate = len(products) > 0
+                    else:
+                        warnings.warn(
+                            "Optimized SOP products overlap on valid inputs; "
+                            "falling back to original rule-by-rule synthesis for this output bit. "
+                            "Use ancilla=True to synthesize the minimized SOP as an OR network.",
+                            RuntimeWarning,
+                        )
+                        if output_encoding == "one-hot":
+                            fallback_rules = _rules_for_output_index(
+                                optimization_data["parsed_rules"],
+                                self.rules,
+                                output_index,
+                            )
+                            for rule in fallback_rules:
+                                QFS.convert_rule(
+                                    qc=self.qc["full_circuit"],
+                                    fuzzy_rule=rule,
+                                    partitions=input_partitions,
+                                    output_partition=output_partition,
+                                    encoding=self.encoding
+                                )
+                                self.qc["full_circuit"].barrier()
+                                applied_gate = True
+                                added_barrier = True
+                        else:
+                            fallback_rules = _rules_for_output_bit(
+                                optimization_data["parsed_rules"],
+                                self.rules,
+                                output_index,
+                                output_partition,
+                                output_encoding,
+                            )
+                            for rule in fallback_rules:
+                                product, _ = _rule_product_and_output_index(
+                                    rule,
+                                    input_partitions,
+                                    output_partition,
+                                    self.encoding,
+                                )
+                                _apply_product_as_mcx(
+                                    self.qc["full_circuit"],
+                                    product,
+                                    output_qreg[output_index],
+                                    optimization_data["var_to_qubit"],
+                                )
+                                applied_gate = True
+                            if applied_gate:
+                                self.qc["full_circuit"].barrier()
+                                added_barrier = True
+                    if draw_qc and applied_gate and not added_barrier:
+                        self.qc["full_circuit"].barrier()
 
             self.out_register_name = list(self.output_fuzzyset.keys())[0]
-            out = ClassicalRegister(len(self.output_fuzzyset[self.out_register_name]))
+            output_register = QFS.select_qreg_by_name(
+                self.qc["full_circuit"],
+                self.out_register_name,
+            )
+            out = ClassicalRegister(output_register.size)
             self.qc["full_circuit"].add_register(out)
             self.qc["full_circuit"].measure(
-                QFS.select_qreg_by_name(
-                    self.qc["full_circuit"], self.out_register_name
-                ),
+                output_register,
                 out,
             )
             if draw_qc:
                 print('draw')
                 if "filename" in kwargs:
-                    self.qc["full_circuit"].draw("mpl", filename=kwargs["filename"])
+                    self.qc["full_circuit"].draw(
+                        "mpl",
+                        filename=_prepare_draw_filename(kwargs["filename"]),
+                    )
                 else:
                     print('draw1')
                     self.qc["full_circuit"].draw("mpl").show()
@@ -317,20 +1016,87 @@ class QuantumFuzzyEngine:
             self.out_register_name = []
             # Use output linguistic terms as labels (keys) to identify the corresponding distributed circuits
             qc_labels = self.output_partition[list(self.output_fuzzyset.keys())[0]].sets
+            output_partition = list(self.output_partition.values())[0]
+            input_partitions = list(self.input_partitions.values())
             for label in qc_labels:
                 modified_output_partition = deepcopy(
-                    list(self.output_partition.values())[0]
+                    output_partition
                 )
                 modified_output_partition.sets = [label]
-                for rule in self.rule_subsets[label]:
-                    QFS.convert_rule(
-                        qc=self.qc[label],
-                        fuzzy_rule=rule,
-                        partitions=list(self.input_partitions.values()),
-                        output_partition=modified_output_partition,
-                        encoding=self.encoding
+                if not optimize:
+                    for rule in self.rule_subsets[label]:
+                        QFS.convert_rule(
+                            qc=self.qc[label],
+                            fuzzy_rule=rule,
+                            partitions=input_partitions,
+                            output_partition=modified_output_partition,
+                            encoding=self.encoding
+                        )
+                        self.qc[label].barrier()
+                else:
+                    optimization_data = _build_optimization_data(
+                        self.qc[label],
+                        self.rules,
+                        input_partitions,
+                        output_partition,
+                        output_encoding,
+                        self.encoding,
                     )
-                    self.qc[label].barrier()
+                    label_output_index = output_partition.sets.index(label)
+                    if verbose:
+                        _print_boolean_optimization_report(
+                            input_partitions,
+                            output_partition,
+                            output_encoding,
+                            optimization_data,
+                            output_indices=[label_output_index],
+                            ancilla=ancilla,
+                    )
+                    products = optimization_data["products_by_output"][label_output_index]
+                    products_are_disjoint = _products_are_disjoint_on_valid_inputs(
+                        products,
+                        optimization_data["valid_inputs"],
+                        optimization_data["variable_order"],
+                    )
+                    term_ancillas = []
+                    if ancilla and not products_are_disjoint and len(products) > 1:
+                        anc = QuantumRegister(len(products), "anc")
+                        self.qc[label].add_register(anc)
+                        term_ancillas = list(anc)
+
+                    output_qreg = QFS.select_qreg_by_name(self.qc[label], label)
+                    if products_are_disjoint:
+                        for product in products:
+                            _apply_product_as_mcx(
+                                self.qc[label],
+                                product,
+                                output_qreg[0],
+                                optimization_data["var_to_qubit"],
+                            )
+                    elif ancilla:
+                        _synthesize_sop_to_target_with_ancillas(
+                            self.qc[label],
+                            products,
+                            output_qreg[0],
+                            optimization_data["var_to_qubit"],
+                            term_ancillas,
+                        )
+                    else:
+                        warnings.warn(
+                            "Optimized SOP products overlap on valid inputs; "
+                            "falling back to original rule-by-rule synthesis for this output bit. "
+                            "Use ancilla=True to synthesize the minimized SOP as an OR network.",
+                            RuntimeWarning,
+                        )
+                        for rule in self.rule_subsets[label]:
+                            QFS.convert_rule(
+                                qc=self.qc[label],
+                                fuzzy_rule=rule,
+                                partitions=input_partitions,
+                                output_partition=modified_output_partition,
+                                encoding=self.encoding
+                            )
+                            self.qc[label].barrier()
                 self.out_register_name.append(
                     list(self.output_fuzzyset.keys())[0] + " " + label
                 )
@@ -343,7 +1109,10 @@ class QuantumFuzzyEngine:
                 if draw_qc:
                     #self.qc[label].draw("mpl").show()
                     if "filename" in kwargs:
-                        self.qc[label].draw("mpl", filename=label+'_'+kwargs["filename"])
+                        self.qc[label].draw(
+                            "mpl",
+                            filename=_prepare_draw_filename(kwargs["filename"], label),
+                        )
                     else:
                         self.qc[label].draw("mpl")
 
@@ -356,7 +1125,8 @@ class QuantumFuzzyEngine:
              GPU (Bool- default False): True for using GPU for simulation. Use False if backend is a real device.
 
             :keyword backend: quantum backend to run the quantum circuit. If not specified, qasm simulator is used.
-            :keyword transpile_info (bool - default False): True for getting information about transpiled qc
+            :keyword transpile_info (bool): True for getting information about transpiled qc.
+                If not specified, defaults to the verbose value passed to the latest build_inference_qc call.
             :keyword optimization_level (int - default 3): Select a Value from 1 to 3 to set the optimization level in the transpiling
             :keyword defuzzification (str): name of the Defuzzification algorithm to use. If not specified, 'centroid' is used. 
         Return:
@@ -366,11 +1136,18 @@ class QuantumFuzzyEngine:
         if "backend" in kwargs:
             backend = kwargs["backend"]
         else:
+            if AerSimulator is None:
+                raise ImportError(
+                    "qiskit_aer is required when execute() is called without a backend. "
+                    "Install qiskit-aer or pass a backend explicitly."
+                )
             backend = AerSimulator()
 
         #Checking Transpilation Command
-        if "transpile_info" in kwargs and kwargs["transpile_info"] == True: transp_info = True
-        else: transp_info = False
+        if "transpile_info" in kwargs:
+            transp_info = bool(kwargs["transpile_info"])
+        else:
+            transp_info = bool(self.transpile_info)
 
         if "optimization_level" in kwargs and kwargs["optimization_level"] != 3: optimization_level = kwargs["optimization_level"]
         else: optimization_level = 3
@@ -424,25 +1201,40 @@ class QuantumFuzzyEngine:
                 self.counts_, color="midnightblue", figsize=(7, 10)
             ).show()
 
-        self.n_q = len(self.output_fuzzyset[list(self.output_fuzzyset.keys())[0]])
-        counts = self.counts_evaluator(n_qubits=self.n_q, counts=self.counts_)
-        normalized_counts = counts
-        output_dict = {
-            i: []
-            for i in self.output_partition[
-                list(self.output_fuzzyset.keys())[0]
-            ].sets
-        }
+        output_partition = self.output_partition[list(self.output_fuzzyset.keys())[0]]
+        if getattr(self, "output_encoding", "one-hot") == "gray":
+            self.n_q = _output_register_size(output_partition, "gray")
+            n_shots = sum(list(self.counts_.values()))
+            normalized_counts = {
+                key: value / n_shots
+                for key, value in self.counts_.items()
+            }
+            output_dict = {
+                set_name: _output_code_for_index(
+                    output_index,
+                    output_partition,
+                    "gray",
+                )[::-1]
+                for output_index, set_name in enumerate(output_partition.sets)
+            }
+        else:
+            self.n_q = len(self.output_fuzzyset[list(self.output_fuzzyset.keys())[0]])
+            counts = self.counts_evaluator(n_qubits=self.n_q, counts=self.counts_)
+            normalized_counts = counts
+            output_dict = {
+                i: []
+                for i in output_partition.sets
+            }
 
-        counter = 0
-        for set in list(output_dict.keys()):
-            counter = counter + 1
-            for i in range(self.n_q):
-                if i == self.n_q - counter:
-                    output_dict[set].append("1")
-                else:
-                    output_dict[set].append("0")
-            output_dict[set] = "".join(output_dict[set])
+            counter = 0
+            for set in list(output_dict.keys()):
+                counter = counter + 1
+                for i in range(self.n_q):
+                    if i == self.n_q - counter:
+                        output_dict[set].append("1")
+                    else:
+                        output_dict[set].append("0")
+                output_dict[set] = "".join(output_dict[set])
 
         memberships = {}
         for state in list(output_dict.values()):
