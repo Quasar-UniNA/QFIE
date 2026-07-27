@@ -1,8 +1,9 @@
 import os
 import sys
 
-#sys.path.insert(0, os.path.abspath("../../src/"))
 sys.path.insert(0, os.path.abspath("../../src/"))
+
+from QFIE import __version__
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -15,7 +16,8 @@ sys.path.insert(0, os.path.abspath("../../src/"))
 project = 'QFIE_Package'
 copyright = '2022, Roberto Schiattarella'
 author = 'Roberto Schiattarella'
-release = '1.1.0'
+version = __version__
+release = __version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
