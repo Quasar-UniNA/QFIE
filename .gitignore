@@ -1,4 +1,10 @@
 ### Python ###
+# macOS metadata
+.DS_Store
+
+# IDE project settings
+.idea/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

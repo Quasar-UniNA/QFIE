@@ -2,10 +2,11 @@ import math
 
 
 class fuzzy_partition:
-    def __init__(self, name, sets, encoding='logaritmic'):
+    def __init__(self, name, sets, encoding='logaritmic', minimize_hamming=False):
         self.name = name
         self.sets = sets
         self.encoding =  encoding
+        self.minimize_hamming = minimize_hamming
        
 
     def len_partition(self):
@@ -13,10 +14,14 @@ class fuzzy_partition:
 
     def associate_quantum_states(self):
         if self.encoding == 'logaritmic':
-            len_state = math.ceil(math.log(self.len_partition(), 2))
+            if self.minimize_hamming:
+                len_state = math.ceil(math.log(self.len_partition() + 1, 2))
+            else:
+                len_state = math.ceil(math.log(self.len_partition(), 2))
             binary_format = "{0:0" + str(len_state) + "b}"
             return {
-                self.sets[i]: binary_format.format(i)[::-1] for i in range(len(self.sets))
+                self.sets[i]: self._state_code(i, binary_format)
+                for i in range(len(self.sets))
             }
         if self.encoding == 'linear':
             binary_dict = {}
@@ -25,6 +30,12 @@ class fuzzy_partition:
                 binary_string = ''.join('1' if j == i else '0' for j in range(len(self.sets)))
                 binary_dict[element] = binary_string[::-1]
             return binary_dict
+
+    def _state_code(self, index, binary_format):
+        if self.minimize_hamming:
+            gray_index = index ^ (index >> 1)
+            return binary_format.format(gray_index)
+        return binary_format.format(index)[::-1]
 
 
 
