@@ -585,11 +585,13 @@ class QuantumFuzzyEngine:
         """
         for set in sets:
             self.input_fuzzysets[var_name].append(set)
+        is_exact_partition = np.allclose(np.sum(sets, axis=0), 1.0)
         self.input_partitions[var_name] = fp.fuzzy_partition(
             var_name,
             set_names,
             encoding=self.encoding,
             minimize_hamming=self.encoding == 'logaritmic',
+            exact_partition=is_exact_partition,
         )
 
     def add_output_fuzzysets(self, var_name, set_names, sets):
@@ -744,6 +746,12 @@ class QuantumFuzzyEngine:
                 )
                 for i in self.input_fuzzysets[var_name]
             ]
+            total_membership = sum(fuzzyfied_values[var_name])
+            if total_membership > 1.0 + 1e-9:
+                raise Exception(
+                    f"Sum of memberships must be less than or equal to 1: "
+                    f"variable '{var_name}' at {input_values[var_name]} sums to {total_membership}."
+                )
         if self.verbose:
             print("Input values ", fuzzyfied_values)
 

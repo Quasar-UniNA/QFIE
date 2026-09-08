@@ -4,7 +4,7 @@ from qiskit_aer import AerSimulator
 
 
 def test_package_version():
-    assert QFIE.__version__ == "1.2.1"
+    assert QFIE.__version__ == "1.2.2"
 
 
 def test_aer_simulator_is_available_as_required_dependency():
