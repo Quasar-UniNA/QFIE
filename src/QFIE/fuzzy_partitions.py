@@ -2,22 +2,35 @@ import math
 
 
 class fuzzy_partition:
-    def __init__(self, name, sets, encoding='logaritmic', minimize_hamming=False):
+    def __init__(self, name, sets, encoding='logaritmic', minimize_hamming=False, exact_partition=False):
         self.name = name
         self.sets = sets
         self.encoding =  encoding
         self.minimize_hamming = minimize_hamming
-       
+        self.exact_partition = exact_partition
+
 
     def len_partition(self):
         return len(self.sets)
 
+    def register_size(self):
+        """Number of qubits needed to represent this partition in logarithmic encoding.
+
+        When minimize_hamming is enabled, an extra state is normally reserved to hold
+        the leftover ("garbage") probability of an input whose membership values do not
+        sum to 1. If the partition is flagged as exact (exact_partition=True), that
+        reservation is skipped since the leftover probability is always zero.
+        """
+        n = self.len_partition()
+        if self.minimize_hamming:
+            if self.exact_partition:
+                return max(1, math.ceil(math.log(n, 2)))
+            return math.ceil(math.log(n + 1, 2))
+        return math.ceil(math.log(n, 2))
+
     def associate_quantum_states(self):
         if self.encoding == 'logaritmic':
-            if self.minimize_hamming:
-                len_state = math.ceil(math.log(self.len_partition() + 1, 2))
-            else:
-                len_state = math.ceil(math.log(self.len_partition(), 2))
+            len_state = self.register_size()
             binary_format = "{0:0" + str(len_state) + "b}"
             return {
                 self.sets[i]: self._state_code(i, binary_format)

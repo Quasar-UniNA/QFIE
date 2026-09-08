@@ -23,13 +23,13 @@ def generate_circuit(fuzzy_partitions, encoding='logaritmic'):
         if encoding=='logaritmic':
             qc.add_register(
                 QuantumRegister(
-                    math.ceil(math.log(partition.len_partition() + 1, 2)),
+                    partition.register_size(),
                     name=partition.name,
                 )
             )
             Qregisters.append(
                 QuantumRegister(
-                    math.ceil(math.log(partition.len_partition() + 1, 2)),
+                    partition.register_size(),
                     name=partition.name,
                 )
             )
